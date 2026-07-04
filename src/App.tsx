@@ -46,6 +46,7 @@ export default function App() {
       setLoadingStep('Downloading Chittattukara Balavedi Magazine...');
       
       const candidates = [
+        '/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/main/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLib/main/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/master/pepparappe.pdf',
@@ -59,26 +60,29 @@ export default function App() {
       
       // We push the direct connection first for all candidates (fast, fail-early)
       candidates.forEach((candidate, index) => {
+        const isLocal = candidate.startsWith('/');
         fetchStrategies.push({
-          name: `Direct GitHub Connection (Source ${index + 1})`,
+          name: isLocal ? 'App Local PDF Asset (Instant & Zero-CORS)' : `Direct GitHub Connection (Source ${index})`,
           url: candidate
         });
       });
 
-      // Then we push the proxy options to bypass CORS/network restrictions
+      // Then we push the proxy options to bypass CORS/network restrictions (only for absolute URLs)
       candidates.forEach((candidate, index) => {
-        fetchStrategies.push({
-          name: `Google Content Proxy (Source ${index + 1})`,
-          url: `https://images1-focus-opensocial.googleusercontent.com/gadgets/proxy?container=focus&refresh=2592000&url=${encodeURIComponent(candidate)}`
-        });
-        fetchStrategies.push({
-          name: `CORS.IO Secure Gateway (Source ${index + 1})`,
-          url: `https://corsproxy.io/?${encodeURIComponent(candidate)}`
-        });
-        fetchStrategies.push({
-          name: `AllOrigins Public Mirror (Source ${index + 1})`,
-          url: `https://api.allorigins.win/raw?url=${encodeURIComponent(candidate)}`
-        });
+        if (!candidate.startsWith('/')) {
+          fetchStrategies.push({
+            name: `Google Content Proxy (Source ${index})`,
+            url: `https://images1-focus-opensocial.googleusercontent.com/gadgets/proxy?container=focus&refresh=2592000&url=${encodeURIComponent(candidate)}`
+          });
+          fetchStrategies.push({
+            name: `CORS.IO Secure Gateway (Source ${index})`,
+            url: `https://corsproxy.io/?${encodeURIComponent(candidate)}`
+          });
+          fetchStrategies.push({
+            name: `AllOrigins Public Mirror (Source ${index})`,
+            url: `https://api.allorigins.win/raw?url=${encodeURIComponent(candidate)}`
+          });
+        }
       });
 
       const fetchWithTimeout = async (url: string, timeoutMs = 25000): Promise<ArrayBuffer> => {
