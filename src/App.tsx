@@ -83,32 +83,6 @@ export default function App() {
           }
         }
 
-        // 3. Fallback automatically to the user's Google Drive PDF link via CORS proxy if local options fail
-        if (!isSuccess) {
-          const driveUrl = 'https://docs.google.com/uc?export=download&id=1GBp2spm7bIzLTVIng_axdaT3YBbo5tmm';
-          const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(driveUrl)}`;
-          try {
-            response = await fetch(proxiedUrl);
-            filename = 'Pepparappe - Chittattukara Public Library.pdf';
-            if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
-              const tempBuffer = await response.arrayBuffer();
-              const uint8 = new Uint8Array(tempBuffer);
-              const isPdf = uint8.length >= 5 &&
-                            uint8[0] === 0x25 &&
-                            uint8[1] === 0x50 &&
-                            uint8[2] === 0x44 &&
-                            uint8[3] === 0x46 &&
-                            uint8[4] === 0x2d; // %PDF-
-              if (isPdf && tempBuffer.byteLength > 1000) {
-                arrayBuffer = tempBuffer;
-                isSuccess = true;
-              }
-            }
-          } catch (e) {
-            console.warn('Google Drive automatic fallback failed:', e);
-          }
-        }
-
         if (isSuccess && arrayBuffer) {
           const size = arrayBuffer.byteLength;
 
