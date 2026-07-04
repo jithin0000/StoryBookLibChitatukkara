@@ -55,8 +55,11 @@ export default function TactileBook({
       const currentIsMobile = window.innerWidth < 768;
       const currentActiveLayout = currentIsMobile ? 'single' : layout;
       const isDouble = currentActiveLayout === 'double' && currentPage > 0 && currentPage < pages.length - 1;
-      const targetWidth = isDouble ? designWidth * 2 + 80 : designWidth + 80;
-      const targetHeight = designHeight + 100;
+      // On mobile we minimize margins to let the book use almost 100% of physical screen width/height
+      const targetWidth = isDouble 
+        ? designWidth * 2 + (currentIsMobile ? 12 : 80) 
+        : designWidth + (currentIsMobile ? 12 : 80);
+      const targetHeight = designHeight + (currentIsMobile ? 36 : 100);
 
       const scaleX = width / targetWidth;
       const scaleY = height / targetHeight;
@@ -239,14 +242,14 @@ export default function TactileBook({
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-between p-4 relative overflow-hidden" ref={containerRef}>
+    <div className="flex-1 flex flex-col items-center justify-between p-1.5 sm:p-4 relative overflow-hidden" ref={containerRef}>
       {/* Top Navbar HUD */}
-      <div className="w-full max-w-4xl flex items-center justify-between border-b border-gold/10 pb-3 mb-2 z-10">
+      <div className="w-full max-w-4xl flex items-center justify-between border-b border-gold/10 pb-2 sm:pb-3 mb-1 sm:mb-2 z-10">
         <div className="flex flex-col">
-          <h2 className="font-serif italic text-lg text-gold/90 font-medium select-none tracking-tight">
+          <h2 className="font-serif italic text-sm sm:text-lg text-gold/90 font-medium select-none tracking-tight">
             Chittattukara Balavedi Magazine
           </h2>
-          <div className="text-xs text-stone-500 font-mono flex items-center gap-2 select-none">
+          <div className="text-[10px] sm:text-xs text-stone-500 font-mono flex items-center gap-2 select-none">
             <span>Pages {currentPage + 1}{isDoubleSpread && ` - ${Math.min(currentPage + 2, pages.length)}`} of {pages.length}</span>
           </div>
         </div>
@@ -480,19 +483,19 @@ export default function TactileBook({
       </div>
 
       {/* Footer Navigation Overlay */}
-      <div className="w-full max-w-lg flex items-center justify-between mt-3 px-4 z-10 select-none">
+      <div className="w-full max-w-lg flex items-center justify-between mt-2 sm:mt-3 px-2 sm:px-4 z-10 select-none">
         <button
           id="prev-page-button"
           onClick={prevPage}
           disabled={currentPage === 0 || isFlipping}
-          className="flex items-center justify-center w-11 h-11 rounded-full bg-stone-900 border border-gold/20 text-gold/80 hover:text-gold hover:bg-stone-800 disabled:opacity-30 disabled:hover:bg-stone-900 disabled:hover:text-gold/80 transition-all cursor-pointer shadow-lg disabled:cursor-not-allowed"
+          className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-stone-900 border border-gold/20 text-gold/80 hover:text-gold hover:bg-stone-800 disabled:opacity-30 disabled:hover:bg-stone-900 disabled:hover:text-gold/80 transition-all cursor-pointer shadow-lg disabled:cursor-not-allowed"
           title="Previous Page (Left Arrow)"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
 
         {/* Minimal tactile dot indicators of book progress */}
-        <div className="flex-1 px-8 flex items-center justify-center gap-1 overflow-hidden">
+        <div className="flex-1 px-2 sm:px-8 flex items-center justify-center gap-1 overflow-hidden">
           {pages.length <= 15 ? (
             pages.map((_, i) => (
               <button
@@ -526,10 +529,10 @@ export default function TactileBook({
           id="next-page-button"
           onClick={nextPage}
           disabled={currentPage >= pages.length - (activeLayout === 'double' && isDoubleSpread ? 2 : 1) || isFlipping}
-          className="flex items-center justify-center w-11 h-11 rounded-full bg-stone-900 border border-gold/20 text-gold/80 hover:text-gold hover:bg-stone-800 disabled:opacity-30 disabled:hover:bg-stone-900 disabled:hover:text-gold/80 transition-all cursor-pointer shadow-lg disabled:cursor-not-allowed"
+          className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-stone-900 border border-gold/20 text-gold/80 hover:text-gold hover:bg-stone-800 disabled:opacity-30 disabled:hover:bg-stone-900 disabled:hover:text-gold/80 transition-all cursor-pointer shadow-lg disabled:cursor-not-allowed"
           title="Next Page (Right Arrow)"
         >
-          <ArrowRight className="w-5 h-5" />
+          <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
       </div>
 

@@ -117,7 +117,7 @@ export default function ScrollBook({ pages, layout, onLayoutChange }: ScrollBook
 
     // 1-page single column layout
     return (
-      <div className="flex flex-col items-center gap-12 py-8 px-4 w-full max-w-xl animate-fade-in">
+      <div className="flex flex-col items-center gap-6 sm:gap-12 py-4 sm:py-8 px-1 sm:px-4 w-full max-w-xl animate-fade-in">
         {pages.map((page) => (
           <motion.div
             key={page.index}
@@ -149,14 +149,14 @@ export default function ScrollBook({ pages, layout, onLayoutChange }: ScrollBook
   };
 
   return (
-    <div className="flex-1 w-full flex flex-col items-center overflow-y-auto px-4">
+    <div className="flex-1 w-full flex flex-col items-center overflow-y-auto px-1.5 sm:px-4">
       {/* Top HUD panel */}
-      <div className="w-full max-w-4xl flex items-center justify-between border-b border-gold/10 pb-3 mb-2 z-10 sticky top-0 bg-slate-950/90 backdrop-blur py-3">
+      <div className="w-full max-w-4xl flex items-center justify-between border-b border-gold/10 pb-2 sm:pb-3 mb-1 sm:mb-2 z-10 sticky top-0 bg-slate-950/90 backdrop-blur py-2 sm:py-3">
         <div className="flex flex-col">
-          <h2 className="font-serif italic text-lg text-gold/90 font-medium select-none tracking-tight">
+          <h2 className="font-serif italic text-sm sm:text-lg text-gold/90 font-medium select-none tracking-tight">
             Chittattukara Balavedi Magazine
           </h2>
-          <span className="text-xs text-stone-500 font-mono select-none">
+          <span className="text-[10px] sm:text-xs text-stone-500 font-mono select-none">
             Continuous Scroll Mode ({pages.length} pages total)
           </span>
         </div>
