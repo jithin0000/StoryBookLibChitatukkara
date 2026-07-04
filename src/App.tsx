@@ -9,6 +9,8 @@ import BookNavbar from './components/BookNavbar';
 import TactileBook from './components/TactileBook';
 import ScrollBook from './components/ScrollBook';
 import StarryBackground from './components/StarryBackground';
+// @ts-ignore
+import pepparappeUrl from './assets/pepparappe.pdf';
 import { BookOpen, RefreshCw, AlertCircle, Loader2, Upload } from 'lucide-react';
 
 export default function App() {
@@ -49,15 +51,16 @@ export default function App() {
       setLoadingStep('Downloading Chittattukara Balavedi Magazine...');
       
       const candidates = [
-        `${import.meta.env.BASE_URL}/pepparappe.pdf`,
+        pepparappeUrl,
+        '/pepparappe.pdf',
+        `${(import.meta as any).env?.BASE_URL || ''}/pepparappe.pdf`,
         'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/main/public/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/main/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLib/main/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/master/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLib/master/pepparappe.pdf',
         'https://raw.githubusercontent.com/JithinM/StoryBookLibChitatukkara/main/pepparappe.pdf',
-        'https://raw.githubusercontent.com/JithinM/StoryBookLib/main/pepparappe.pdf',
-        'https://github.com/jithin0000/StoryBookLibChitatukkara/tree/e77d65b3f5ac6fe86060eea880431ef05ebcd8f6/public'
+        'https://raw.githubusercontent.com/JithinM/StoryBookLib/main/pepparappe.pdf'
       ];
       
       // Define all download sources and proxies to try
@@ -65,16 +68,16 @@ export default function App() {
       
       // We push the direct connection first for all candidates (fast, fail-early)
       candidates.forEach((candidate, index) => {
-        const isLocal = candidate.startsWith('/');
+        const isLocal = !candidate.startsWith('http');
         fetchStrategies.push({
-          name: isLocal ? 'App Local PDF Asset (Instant & Zero-CORS)' : `Direct GitHub Connection (Source ${index})`,
+          name: isLocal ? `App Local PDF Asset (Source ${index + 1})` : `Direct GitHub Connection (Source ${index})`,
           url: candidate
         });
       });
 
       // Then we push the proxy options to bypass CORS/network restrictions (only for absolute URLs)
       candidates.forEach((candidate, index) => {
-        if (!candidate.startsWith('/')) {
+        if (candidate.startsWith('http')) {
           fetchStrategies.push({
             name: `Google Content Proxy (Source ${index})`,
             url: `https://images1-focus-opensocial.googleusercontent.com/gadgets/proxy?container=focus&refresh=2592000&url=${encodeURIComponent(candidate)}`
