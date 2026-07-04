@@ -43,30 +43,15 @@ export default function App() {
         // 1. Check if there's a cached version in IndexedDB
         const cached = await getBookFromCache();
 
-        // 2. Fetch the PDF automatically from the public directory
-        let response = await fetch('/pepparappe.pdf');
+        // 2. Fetch the PDF automatically (Primary: GitHub, Secondary: Local paths)
         let filename = 'Pepparappe - Chittattukara Public Library.pdf';
         let arrayBuffer: ArrayBuffer | null = null;
         let isSuccess = false;
 
-        if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
-          const tempBuffer = await response.arrayBuffer();
-          const uint8 = new Uint8Array(tempBuffer);
-          const isPdf = uint8.length >= 5 &&
-                        uint8[0] === 0x25 &&
-                        uint8[1] === 0x50 &&
-                        uint8[2] === 0x44 &&
-                        uint8[3] === 0x46 &&
-                        uint8[4] === 0x2d; // %PDF-
-          if (isPdf && tempBuffer.byteLength > 1000) {
-            arrayBuffer = tempBuffer;
-            isSuccess = true;
-          }
-        }
-
-        if (!isSuccess) {
-          response = await fetch('/pepperappe.pdf');
-          filename = 'Pepperappe - Chittattukara Public Library.pdf';
+        // Try GitHub Raw directly (highly performant and supports CORS natively)
+        try {
+          const githubRawUrl = 'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/main/pepparappe.pdf';
+          const response = await fetch(githubRawUrl);
           if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
             const tempBuffer = await response.arrayBuffer();
             const uint8 = new Uint8Array(tempBuffer);
@@ -80,6 +65,80 @@ export default function App() {
               arrayBuffer = tempBuffer;
               isSuccess = true;
             }
+          }
+        } catch (e) {
+          console.warn('Failed to fetch from GitHub raw URL directly:', e);
+        }
+
+        // Try GitHub Raw with CORS proxy if direct fetch failed
+        if (!isSuccess) {
+          try {
+            const githubRawUrl = 'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/main/pepparappe.pdf';
+            const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(githubRawUrl)}`;
+            const response = await fetch(proxiedUrl);
+            if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
+              const tempBuffer = await response.arrayBuffer();
+              const uint8 = new Uint8Array(tempBuffer);
+              const isPdf = uint8.length >= 5 &&
+                            uint8[0] === 0x25 &&
+                            uint8[1] === 0x50 &&
+                            uint8[2] === 0x44 &&
+                            uint8[3] === 0x46 &&
+                            uint8[4] === 0x2d; // %PDF-
+              if (isPdf && tempBuffer.byteLength > 1000) {
+                arrayBuffer = tempBuffer;
+                isSuccess = true;
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to fetch from GitHub raw URL via CORS proxy:', e);
+          }
+        }
+
+        // Fallback to local /pepparappe.pdf
+        if (!isSuccess) {
+          try {
+            const response = await fetch('/pepparappe.pdf');
+            if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
+              const tempBuffer = await response.arrayBuffer();
+              const uint8 = new Uint8Array(tempBuffer);
+              const isPdf = uint8.length >= 5 &&
+                            uint8[0] === 0x25 &&
+                            uint8[1] === 0x50 &&
+                            uint8[2] === 0x44 &&
+                            uint8[3] === 0x46 &&
+                            uint8[4] === 0x2d; // %PDF-
+              if (isPdf && tempBuffer.byteLength > 1000) {
+                arrayBuffer = tempBuffer;
+                isSuccess = true;
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to fetch /pepparappe.pdf automatically:', e);
+          }
+        }
+
+        // Fallback to local /pepperappe.pdf
+        if (!isSuccess) {
+          try {
+            const response = await fetch('/pepperappe.pdf');
+            filename = 'Pepperappe - Chittattukara Public Library.pdf';
+            if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
+              const tempBuffer = await response.arrayBuffer();
+              const uint8 = new Uint8Array(tempBuffer);
+              const isPdf = uint8.length >= 5 &&
+                            uint8[0] === 0x25 &&
+                            uint8[1] === 0x50 &&
+                            uint8[2] === 0x44 &&
+                            uint8[3] === 0x46 &&
+                            uint8[4] === 0x2d; // %PDF-
+              if (isPdf && tempBuffer.byteLength > 1000) {
+                arrayBuffer = tempBuffer;
+                isSuccess = true;
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to fetch /pepperappe.pdf automatically:', e);
           }
         }
 
