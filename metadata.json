@@ -1,0 +1,6 @@
+{
+  "name": "Storybook PDF Reader",
+  "description": "A tactile, continuous scroll and page-turning PDF storybook reader with physical paper animation, fluid transitions, and responsive single/double page layouts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
