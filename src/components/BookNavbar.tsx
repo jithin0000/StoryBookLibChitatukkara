@@ -1,11 +1,10 @@
 /**
- * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ReaderMode } from '../types';
-import { BookOpen, RefreshCw, Compass, Maximize2, Minimize2 } from 'lucide-react';
+import { BookOpen, Compass, Maximize2, Minimize2 } from 'lucide-react';
 
 interface BookNavbarProps {
   mode: ReaderMode;
@@ -45,9 +44,9 @@ export default function BookNavbar({ mode, onModeChange, fileName }: BookNavbarP
   };
 
   return (
-    <header className="w-full bg-slate-900 border-b border-gold/15 py-2 sm:py-3 px-3 sm:px-6 flex items-center justify-between shadow-md z-20 select-none">
+    <header className="w-full bg-slate-900 border-b border-gold/15 py-2 sm:py-3.5 px-3 sm:px-6 flex items-center justify-between shadow-md z-20 select-none">
       {/* App Logo branding */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 sm:gap-2.5">
         <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-tr from-amber-700/80 to-gold/90 flex items-center justify-center border border-gold/30 shadow-md">
           <BookOpen className="w-4 sm:w-4.5 h-4 sm:h-4.5 text-slate-950 stroke-[2.5]" />
         </div>

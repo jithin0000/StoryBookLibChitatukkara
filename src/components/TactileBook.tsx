@@ -1,82 +1,98 @@
 /**
- * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PageImage, ViewLayout } from '../types';
 import { ArrowLeft, ArrowRight, RefreshCw, Layers } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, useMotionValue, useTransform, useAnimation } from 'framer-motion';
+import confetti from 'canvas-confetti';
 
 interface TactileBookProps {
   pages: PageImage[];
+  layout: ViewLayout;
   currentPage: number;
   onPageChange: (index: number) => void;
-  layout: ViewLayout;
   onLayoutChange: (layout: ViewLayout) => void;
 }
 
 export default function TactileBook({
   pages,
+  layout,
   currentPage,
   onPageChange,
-  layout,
   onLayoutChange,
 }: TactileBookProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const [scale, setScale] = useState(1);
   const [isFlipping, setIsFlipping] = useState(false);
-  const [flipDirection, setFlipDirection] = useState<'next' | 'prev' | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const controls = useAnimation();
 
-  // Dimensions of a single page in our design coordinate system
-  const designWidth = 430;
-  const designHeight = 610;
+  // Motion values for drag integration
+  const dragX = useMotionValue(0);
+  
+  // Map drag x offset to 3D rotation
+  // For turning forward (dragging left, negative x): we rotate current page from 0 to -140 deg
+  // For turning backward (dragging right, positive x): we rotate incoming page from -140 to 0 deg
+  const rotateY = useTransform(dragX, [-200, 0, 200], [-130, 0, 130]);
+  const pageShadow = useTransform(dragX, [-200, 0, 200], [0.4, 0, 0.4]);
 
-  // Detect mobile screen on mount & resize
+  // Handle window resizing and responsive scaling
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
+    
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
   }, []);
 
   const activeLayout = isMobile ? 'single' : layout;
   const isDoubleSpread = activeLayout === 'double' && currentPage > 0 && currentPage < pages.length - 1;
   const isAtEnd = currentPage >= pages.length - (activeLayout === 'double' && isDoubleSpread ? 2 : 1);
 
-  // Responsive scaling to fit container
+  // Responsive scaling to fit container precisely
   useEffect(() => {
-    const observer = new ResizeObserver((entries) => {
-      if (!entries || entries.length === 0) return;
-      const { width, height } = entries[0].contentRect;
+    const updateScale = () => {
+      if (!containerRef.current) return;
+      
+      const { width, height } = containerRef.current.getBoundingClientRect();
+      const designWidth = 420;
+      const designHeight = 560;
 
-      const currentIsMobile = window.innerWidth < 768;
-      const currentActiveLayout = currentIsMobile ? 'single' : layout;
-      const isDouble = currentActiveLayout === 'double' && currentPage > 0 && currentPage < pages.length - 1;
-      // On mobile we minimize margins to let the book use almost 100% of physical screen width/height
-      const targetWidth = isDouble 
-        ? designWidth * 2 + (currentIsMobile ? 12 : 80) 
-        : designWidth + (currentIsMobile ? 12 : 80);
-      const targetHeight = designHeight + (currentIsMobile ? 36 : 100);
+      // Mobile gets near-fullscreen viewport margins (minimal padding to maximize book size on small screens)
+      const targetWidth = isDoubleSpread 
+        ? designWidth * 2 + (isMobile ? 2 : 80) 
+        : designWidth + (isMobile ? 2 : 80);
+      const targetHeight = designHeight + (isMobile ? 4 : 100);
 
       const scaleX = width / targetWidth;
       const scaleY = height / targetHeight;
-      const finalScale = Math.min(scaleX, scaleY, 1.3); // Upper cap of 1.3x for sharpness
+      
+      // Compute ideal scale to prevent overflow
+      const newScale = Math.min(scaleX, scaleY, 1.2);
+      setScale(newScale);
+    };
 
-      setScale(finalScale > 0.1 ? finalScale : 1);
-    });
-
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
     if (containerRef.current) {
       observer.observe(containerRef.current);
     }
+    window.addEventListener('resize', updateScale);
 
-    return () => observer.disconnect();
-  }, [layout, currentPage, pages.length]);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateScale);
+    };
+  }, [activeLayout, isDoubleSpread, isMobile]);
 
-  // Handle arrow keys
+  // Handle Keyboard Arrows for tactile browsing
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight') {
@@ -87,159 +103,136 @@ export default function TactileBook({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentPage, isFlipping, activeLayout, pages.length]);
+  }, [currentPage, activeLayout, isFlipping, pages.length]);
 
-  const nextPage = () => {
+  const nextPage = async () => {
     if (isFlipping) return;
-    
-    if (activeLayout === 'double') {
-      if (currentPage === 0) {
-        triggerFlip('next', 1);
-      } else if (currentPage + 2 < pages.length) {
-        triggerFlip('next', currentPage + 2);
-      } else if (currentPage + 1 < pages.length) {
-        triggerFlip('next', currentPage + 1);
-      }
-    } else {
-      if (currentPage + 1 < pages.length) {
-        triggerFlip('next', currentPage + 1);
-      }
-    }
-  };
-
-  const prevPage = () => {
-    if (isFlipping) return;
-
-    if (activeLayout === 'double') {
-      if (currentPage === 1) {
-        triggerFlip('prev', 0);
-      } else if (currentPage - 2 >= 0) {
-        triggerFlip('prev', currentPage - 2);
-      }
-    } else {
-      if (currentPage - 1 >= 0) {
-        triggerFlip('prev', currentPage - 1);
-      }
-    }
-  };
-
-  const triggerFlip = (direction: 'next' | 'prev', targetIndex: number) => {
-    setFlipDirection(direction);
-
-    if (activeLayout === 'single') {
-      // Single page uses instantaneous parent state updates because Framer Motion's AnimatePresence
-      // coordinates concurrent exit/entry animations elegantly. This avoids delay/lag on mobile.
-      onPageChange(targetIndex);
-    } else {
+    const step = activeLayout === 'double' && currentPage > 0 ? 2 : 1;
+    if (currentPage + step < pages.length) {
       setIsFlipping(true);
       
-      // Tactile delay to let the double-spread paper-turning 3D animation complete beautifully
-      setTimeout(() => {
-        onPageChange(targetIndex);
-        setIsFlipping(false);
-        setFlipDirection(null);
-      }, 1200);
+      // Trigger gorgeous turning animation
+      await controls.start({
+        rotateY: -180,
+        transition: { duration: 0.6, ease: 'easeInOut' }
+      });
+      
+      const nextIndex = Math.min(currentPage + step, pages.length - 1);
+      onPageChange(nextIndex);
+      
+      // Trigger confetti if completed
+      const nextIsAtEnd = nextIndex >= pages.length - (activeLayout === 'double' && nextIndex > 0 && nextIndex < pages.length - 1 ? 2 : 1);
+      if (nextIsAtEnd) {
+        triggerConfetti();
+      }
+
+      // Reset coordinates silently
+      dragX.set(0);
+      controls.set({ rotateY: 0 });
+      setIsFlipping(false);
     }
   };
 
-  // Determine which page indexes to show based on current layout
-  let leftPageIdx = isDoubleSpread ? currentPage : null;
-  let rightPageIdx = isDoubleSpread ? currentPage + 1 : currentPage;
+  const prevPage = async () => {
+    if (isFlipping) return;
+    if (currentPage > 0) {
+      setIsFlipping(true);
+      const step = activeLayout === 'double' && currentPage > 2 ? 2 : 1;
+      const prevIndex = Math.max(currentPage - step, 0);
 
-  if (isDoubleSpread && isFlipping) {
-    if (flipDirection === 'next') {
-      leftPageIdx = currentPage;
-      rightPageIdx = Math.min(currentPage + 3, pages.length - 1);
-    } else if (flipDirection === 'prev') {
-      leftPageIdx = Math.max(currentPage - 2, 0);
-      rightPageIdx = currentPage + 1;
+      // Slide in from left transition
+      controls.set({ rotateY: -180 });
+      onPageChange(prevIndex);
+
+      await controls.start({
+        rotateY: 0,
+        transition: { duration: 0.6, ease: 'easeInOut' }
+      });
+
+      dragX.set(0);
+      setIsFlipping(false);
     }
-  }
+  };
 
-  // Render a single tactile page surface
-  const renderPageSurface = (pageIdx: number, isLeft: boolean) => {
-    const page = pages[pageIdx];
-    if (!page) return null;
+  // Drag Gesture Ended
+  const handleDragEnd = async (_event: any, info: any) => {
+    const threshold = 70; // drag distance required to flip
+    const velocityThreshold = 200; // fast swipe speed
+    const xOffset = info.offset.x;
+    const xVelocity = info.velocity.x;
 
-    return (
-      <div
-        id={`page-surface-${pageIdx}`}
-        className="relative select-none bg-paper-light shadow-md transition-shadow duration-300 hover:shadow-lg overflow-hidden border border-amber-900/10"
-        style={{
-          width: designWidth,
-          height: designHeight,
-          borderRadius: activeLayout === 'single'
-            ? '12px'
-            : isLeft 
-            ? '12px 3px 3px 12px' 
-            : '3px 12px 12px 3px',
-        }}
-      >
-        {/* Real-time high-resolution page image */}
-        <img
-          src={page.dataUrl}
-          alt={`Page ${page.index + 1}`}
-          className="w-full h-full object-contain pointer-events-none"
-          referrerPolicy="no-referrer"
-        />
-
-        {/* Tactile paper fiber highlight texture */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-white/10 via-transparent to-black/5 mix-blend-overlay pointer-events-none" />
+    if (xOffset < -threshold || xVelocity < -velocityThreshold) {
+      // Swipe left -> Go to Next Page
+      const step = activeLayout === 'double' && currentPage > 0 ? 2 : 1;
+      if (currentPage + step < pages.length) {
+        setIsFlipping(true);
+        // Animate out the remaining flip rotation
+        await controls.start({
+          rotateY: -180,
+          transition: { duration: 0.3, ease: 'easeOut' }
+        });
+        const nextIndex = Math.min(currentPage + step, pages.length - 1);
+        onPageChange(nextIndex);
         
-        {/* Subtle physical page aging gradient border */}
-        <div 
-          className="absolute inset-0 pointer-events-none border border-black/5"
-          style={{
-            borderRadius: activeLayout === 'single'
-              ? '12px'
-              : isLeft 
-              ? '12px 3px 3px 12px' 
-              : '3px 12px 12px 3px',
-          }}
-        />
+        // Trigger confetti if completed
+        const nextIsAtEnd = nextIndex >= pages.length - (activeLayout === 'double' && nextIndex > 0 && nextIndex < pages.length - 1 ? 2 : 1);
+        if (nextIsAtEnd) {
+          triggerConfetti();
+        }
 
-        {/* Page numbers formatted inside margins */}
-        <div 
-          className={`absolute bottom-3 font-mono text-xs text-amber-900/50 ${
-            activeLayout === 'single' ? 'right-6' : isLeft ? 'left-6' : 'right-6'
-          }`}
-        >
-          {page.index + 1}
-        </div>
-      </div>
-    );
+        dragX.set(0);
+        controls.set({ rotateY: 0 });
+        setIsFlipping(false);
+      } else {
+        // Elastic snap back since no more pages
+        await controls.start({ rotateY: 0, transition: { type: 'spring', stiffness: 300, damping: 20 } });
+        dragX.set(0);
+      }
+    } else if (xOffset > threshold || xVelocity > velocityThreshold) {
+      // Swipe right -> Go to Previous Page
+      if (currentPage > 0) {
+        setIsFlipping(true);
+        const step = activeLayout === 'double' && currentPage > 2 ? 2 : 1;
+        const prevIndex = Math.max(currentPage - step, 0);
+        
+        // Setup state on prev index, but visual page is flipped left
+        controls.set({ rotateY: -180 });
+        onPageChange(prevIndex);
+
+        // Animate turning back
+        await controls.start({
+          rotateY: 0,
+          transition: { duration: 0.4, ease: 'easeOut' }
+        });
+        dragX.set(0);
+        setIsFlipping(false);
+      } else {
+        // Elastic snap back
+        await controls.start({ rotateY: 0, transition: { type: 'spring', stiffness: 300, damping: 20 } });
+        dragX.set(0);
+      }
+    } else {
+      // Snap back if threshold not met
+      await controls.start({ rotateY: 0, transition: { type: 'spring', stiffness: 300, damping: 25 } });
+      dragX.set(0);
+    }
   };
 
-  // Beautiful single page roll / curl transitions
-  const singlePageVariants = {
-    enter: (dir: 'next' | 'prev') => ({
-      rotateY: dir === 'next' ? 0 : -180,
-      scale: dir === 'next' ? 0.96 : 1,
-      opacity: dir === 'next' ? 0.8 : 1,
-      zIndex: dir === 'next' ? 10 : 20,
-      transformOrigin: 'left center',
-    }),
-    center: {
-      rotateY: 0,
-      scale: 1,
-      opacity: 1,
-      zIndex: 15,
-      transition: {
-        duration: 1.2,
-        ease: [0.25, 1, 0.5, 1], // elegant ease-out
-      }
-    },
-    exit: (dir: 'next' | 'prev') => ({
-      rotateY: dir === 'next' ? -180 : 0,
-      scale: dir === 'next' ? 1 : 0.96,
-      opacity: dir === 'next' ? 0 : 0.8,
-      zIndex: dir === 'next' ? 20 : 10,
-      transformOrigin: 'left center',
-      transition: {
-        duration: 1.2,
-        ease: [0.25, 1, 0.5, 1],
-      }
-    })
+  const triggerConfetti = () => {
+    confetti({
+      particleCount: 120,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#E5C158', '#B08E2B', '#FFFFFF', '#475569']
+    });
+  };
+
+  // Helper page render loaders
+  const getPageUrl = (index: number) => {
+    if (index >= 0 && index < pages.length) {
+      return pages[index].url;
+    }
+    return '';
   };
 
   return (
@@ -255,231 +248,251 @@ export default function TactileBook({
           </div>
         </div>
 
-        {/* View Mode controls - hidden on mobile */}
+        {/* Column layout buttons (hidden on mobile) */}
         {!isMobile && (
-          <div className="flex items-center gap-2 bg-stone-900/80 p-1 rounded-lg border border-gold/10 shadow-inner">
+          <div className="flex items-center gap-1.5 bg-slate-900/80 p-1 rounded-lg border border-gold/5">
             <button
-              id="layout-toggle-single"
               onClick={() => onLayoutChange('single')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium font-sans tracking-wide transition-all ${
+              className={`p-1.5 rounded text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
                 layout === 'single'
-                  ? 'bg-gold/20 text-gold border border-gold/30 shadow'
-                  : 'text-stone-400 hover:text-stone-200 border border-transparent'
+                  ? 'bg-gold/15 text-gold border border-gold/25 shadow-inner'
+                  : 'text-stone-400 hover:text-stone-200'
               }`}
             >
-              <Layers className="w-3.5 h-3.5" />
-              1 Page
+              <Layers className="w-3.5 h-3.5 rotate-90" />
+              <span>Single Page</span>
             </button>
             <button
-              id="layout-toggle-double"
               onClick={() => onLayoutChange('double')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium font-sans tracking-wide transition-all ${
+              className={`p-1.5 rounded text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
                 layout === 'double'
-                  ? 'bg-gold/20 text-gold border border-gold/30 shadow'
-                  : 'text-stone-400 hover:text-stone-200 border border-transparent'
+                  ? 'bg-gold/15 text-gold border border-gold/25 shadow-inner'
+                  : 'text-stone-400 hover:text-stone-200'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              2 Pages
+              <span>Double Spread</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* Main interactive stage */}
-      <div className="flex-1 w-full flex items-center justify-center relative">
-        
-        {/* Left Tap Zone (50% of viewport width) to navigate to the previous page */}
-        <div
-          id="left-tap-zone"
-          onClick={prevPage}
-          className={`absolute left-0 top-0 bottom-0 w-1/2 z-20 cursor-w-resize flex items-center justify-start pl-4 sm:pl-8 group select-none transition-opacity duration-300 ${
-            currentPage === 0 || isFlipping ? 'pointer-events-none opacity-0' : 'pointer-events-auto'
-          }`}
+      {/* Primary 3D Book Stage */}
+      <div className="flex-1 flex items-center justify-center w-full z-10 select-none">
+        <div 
+          className="relative transition-transform duration-300"
+          style={{ transform: `scale(${scale})` }}
         >
-          {/* Faint hover arrow indicator */}
-          <div className="w-10 h-10 rounded-full bg-slate-950/60 border border-gold/15 flex items-center justify-center text-gold/70 opacity-0 group-hover:opacity-100 group-active:scale-90 transition-all duration-300 shadow-lg backdrop-blur-sm pointer-events-none">
-            <ArrowLeft className="w-5 h-5" />
-          </div>
-        </div>
-
-        {/* Right Tap Zone (50% of viewport width) to navigate to the next page */}
-        <div
-          id="right-tap-zone"
-          onClick={nextPage}
-          className={`absolute right-0 top-0 bottom-0 w-1/2 z-20 cursor-e-resize flex items-center justify-end pr-4 sm:pr-8 group select-none transition-opacity duration-300 ${
-            currentPage >= pages.length - (activeLayout === 'double' && isDoubleSpread ? 2 : 1) || isFlipping 
-              ? 'pointer-events-none opacity-0' 
-              : 'pointer-events-auto'
-          }`}
-        >
-          {/* Faint hover arrow indicator */}
-          <div className="w-10 h-10 rounded-full bg-slate-950/60 border border-gold/15 flex items-center justify-center text-gold/70 opacity-0 group-hover:opacity-100 group-active:scale-90 transition-all duration-300 shadow-lg backdrop-blur-sm pointer-events-none">
-            <ArrowRight className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div
-          className="transition-transform duration-500 ease-out flex items-center justify-center relative"
-          style={{
-            transform: `scale(${scale})`,
-            transformStyle: 'preserve-3d',
-            perspective: '1500px',
-            width: isDoubleSpread ? designWidth * 2 : designWidth,
-            height: designHeight,
-          }}
-        >
-          {/* Paper book edge stack - Tactile page sheets layer behind left & right spreads */}
-          {isDoubleSpread && (
-            <>
-              {/* Left page sheets stack */}
-              <div 
-                className="absolute top-1 bottom-1 bg-stone-200/80 rounded-l-lg border-l border-y border-stone-300 shadow-sm transition-all"
-                style={{
-                  width: '8px',
-                  left: '-8px',
-                  transform: 'translateZ(-10px)',
-                  boxShadow: '-4px 4px 8px rgba(0,0,0,0.25)',
-                }}
-              />
-              {/* Right page sheets stack */}
-              <div 
-                className="absolute top-1 bottom-1 bg-stone-200/80 rounded-r-lg border-r border-y border-stone-300 shadow-sm transition-all"
-                style={{
-                  width: '8px',
-                  right: '-8px',
-                  transform: 'translateZ(-10px)',
-                  boxShadow: '4px 4px 8px rgba(0,0,0,0.25)',
-                }}
-              />
-            </>
-          )}
-
-          {/* Book open spread shadow layer */}
+          {/* Main 3D Book Frame */}
           <div 
-            className="absolute -inset-6 pointer-events-none transition-all duration-300"
+            className="perspective-container relative flex items-center justify-center select-none"
             style={{
-              background: isDoubleSpread 
-                ? 'radial-gradient(ellipse at center, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0) 80%)'
-                : 'radial-gradient(ellipse at center, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0) 70%)',
-              transform: 'translateZ(-20px)',
+              width: activeLayout === 'double' ? '840px' : '420px',
+              height: '560px',
             }}
-          />
+          >
+            {/* Center Spine Shadow overlay (only in double layout) */}
+            {activeLayout === 'double' && (
+              <div className="absolute top-0 bottom-0 left-1/2 w-[30px] -ml-[15px] bg-gradient-to-r from-black/45 via-black/10 to-black/45 z-30 pointer-events-none" />
+            )}
 
-          {/* Book spine (the central binding crease) */}
-          {isDoubleSpread && (
-            <div 
-              className="absolute top-0 bottom-0 w-8 z-30 pointer-events-none transition-opacity duration-300"
-              style={{
-                left: `calc(50% - 16px)`,
-                background: 'linear-gradient(to right, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.5) 45%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.5) 55%, rgba(0,0,0,0.2) 100%)',
-              }}
-            />
-          )}
+            {/* Render 3D Book layouts */}
+            {activeLayout === 'double' ? (
+              // ------------------------------------
+              // DOUBLE PAGE SPREAD 3D VIEWPORT
+              // ------------------------------------
+              <>
+                {/* Left hardbook cover board background */}
+                <div className="absolute top-0 bottom-0 left-0 right-1/2 bg-amber-950/40 rounded-l-xl border-l-4 border-y-2 border-amber-900 shadow-2xl z-0" />
+                {/* Right hardbook cover board background */}
+                <div className="absolute top-0 bottom-0 left-1/2 right-0 bg-amber-950/40 rounded-r-xl border-r-4 border-y-2 border-amber-900 shadow-2xl z-0" />
 
-          {/* Double spread rendering */}
-          {activeLayout === 'double' && isDoubleSpread ? (
-            <div className="flex w-full h-full relative" style={{ transformStyle: 'preserve-3d' }}>
-              {/* Left Page (even index) */}
-              <div className="w-1/2 h-full flex justify-end relative" style={{ transformStyle: 'preserve-3d' }}>
-                {renderPageSurface(leftPageIdx!, true)}
-              </div>
+                {/* Left Fixed Base Page (revealed when turning right) */}
+                <div className="absolute top-2 bottom-2 left-2 right-1/2 bg-white rounded-l-md overflow-hidden border-r border-stone-200 z-10 page-shadow-right select-none">
+                  {currentPage > 0 ? (
+                    <img 
+                      src={getPageUrl(currentPage - 1)} 
+                      alt="Left Static Under" 
+                      className="w-full h-full object-fill pointer-events-none"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-stone-900 flex items-center justify-center text-stone-500 font-serif italic text-sm">Cover Inner</div>
+                  )}
+                </div>
 
-              {/* Right Page (odd index) */}
-              <div className="w-1/2 h-full flex justify-start relative" style={{ transformStyle: 'preserve-3d' }}>
-                {renderPageSurface(rightPageIdx!, false)}
-              </div>
+                {/* Right Fixed Base Page (revealed when turning left) */}
+                <div className="absolute top-2 bottom-2 left-1/2 right-2 bg-white rounded-r-md overflow-hidden border-l border-stone-200 z-10 page-shadow-left select-none">
+                  {currentPage + 2 < pages.length ? (
+                    <img 
+                      src={getPageUrl(currentPage + 2)} 
+                      alt="Right Static Under" 
+                      className="w-full h-full object-fill pointer-events-none"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-stone-900 flex items-center justify-center text-stone-500 font-serif italic text-sm font-semibold">End Cover</div>
+                  )}
+                </div>
 
-              {/* Turning 3D Page flip animation overlay */}
-              {isFlipping && flipDirection === 'next' && (
-                <div 
-                  className="absolute top-0 right-0 w-1/2 h-full z-40 origin-left"
+                {/* Left Page (Visual Spine Static Front) */}
+                <div className="absolute top-2 bottom-2 left-2 right-1/2 bg-white rounded-l-md overflow-hidden border-r border-stone-200 z-20 page-shadow-right select-none">
+                  {currentPage === 0 ? (
+                    // On first page (cover), the left side of spread is empty cover backboard
+                    <div className="w-full h-full bg-slate-900 flex items-center justify-center border-r border-stone-800">
+                      <span className="font-serif italic text-stone-600 text-xs tracking-widest">CHITTATTUKARA BALAVEDI</span>
+                    </div>
+                  ) : (
+                    <img 
+                      src={getPageUrl(currentPage)} 
+                      alt="Left Active Page" 
+                      className="w-full h-full object-fill pointer-events-none"
+                    />
+                  )}
+                  <span className="absolute bottom-2 left-4 font-mono text-[10px] text-stone-400 bg-black/40 px-2 py-0.5 rounded">Page {currentPage === 0 ? 'Cover' : currentPage + 1}</span>
+                </div>
+
+                {/* Right Flippable Active Page Sheet (Draggable with Mouse/Touch) */}
+                <motion.div
+                  className="absolute top-2 bottom-2 left-1/2 right-2 bg-white rounded-r-md overflow-hidden border-l border-stone-200 page-shadow-left cursor-grab active:cursor-grabbing origin-left select-none"
                   style={{
-                    animation: 'pageFlipNext 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards',
+                    zIndex: isFlipping ? 40 : 25,
                     transformStyle: 'preserve-3d',
+                    rotateY: rotateY,
+                    transformOrigin: 'left center',
                   }}
+                  drag="x"
+                  dragConstraints={{ left: -300, right: 0 }}
+                  dragElastic={0.05}
+                  dragMomentum={false}
+                  onDragStart={() => setIsFlipping(true)}
+                  onDrag={(_event, info) => {
+                    dragX.set(info.offset.x);
+                  }}
+                  onDragEnd={handleDragEnd}
+                  animate={controls}
                 >
-                  {/* Front of flipping sheet */}
-                  <div className="absolute inset-0 backface-hidden" style={{ transformStyle: 'preserve-3d' }}>
-                    {renderPageSurface(currentPage + 1, false)}
+                  {/* Front Side of sheet (Currently viewed Page) */}
+                  <div className="absolute inset-0 z-10 w-full h-full backface-hidden">
+                    <img 
+                      src={getPageUrl(currentPage + 1)} 
+                      alt="Right Flipping Page Front" 
+                      className="w-full h-full object-fill pointer-events-none"
+                    />
+                    <span className="absolute bottom-2 right-4 font-mono text-[10px] text-stone-400 bg-black/40 px-2 py-0.5 rounded">Page {currentPage + 2}</span>
+                    
+                    {/* Shadow overlay darkening sheet as it turns */}
+                    <motion.div 
+                      className="absolute inset-0 bg-black pointer-events-none"
+                      style={{ opacity: pageShadow }}
+                    />
                   </div>
-                  {/* Back of flipping sheet */}
+
+                  {/* Back Side of sheet (Revealed when turned over to the left) */}
                   <div 
-                    className="absolute inset-0 backface-hidden" 
+                    className="absolute inset-0 z-0 w-full h-full"
                     style={{ 
                       transform: 'rotateY(180deg)',
-                      transformStyle: 'preserve-3d',
+                      backfaceVisibility: 'hidden',
                     }}
                   >
-                    {renderPageSurface(Math.min(currentPage + 2, pages.length - 1), true)}
+                    {currentPage + 2 < pages.length ? (
+                      <img 
+                        src={getPageUrl(currentPage + 2)} 
+                        alt="Right Flipping Page Back" 
+                        className="w-full h-full object-fill pointer-events-none"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-slate-900" />
+                    )}
                   </div>
-                </div>
-              )}
-
-              {/* Prev 3D Page flip animation overlay */}
-              {isFlipping && flipDirection === 'prev' && (
-                <div 
-                  className="absolute top-0 left-0 w-1/2 h-full z-40 origin-right"
-                  style={{
-                    animation: 'pageFlipPrev 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards',
-                    transformStyle: 'preserve-3d',
-                  }}
-                >
-                  {/* Front of flipping sheet */}
-                  <div className="absolute inset-0 backface-hidden" style={{ transformStyle: 'preserve-3d' }}>
-                    {renderPageSurface(currentPage, true)}
-                  </div>
-                  {/* Back of flipping sheet */}
-                  <div 
-                    className="absolute inset-0 backface-hidden" 
-                    style={{ 
-                      transform: 'rotateY(-180deg)',
-                      transformStyle: 'preserve-3d',
-                    }}
-                  >
-                    {renderPageSurface(Math.max(currentPage - 1, 0), false)}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Immersive Single Page with gorgeous curling/rolling animation */
-            <div className="relative w-full h-full flex items-center justify-center" style={{ transformStyle: 'preserve-3d' }}>
-              <AnimatePresence initial={false} custom={flipDirection || 'next'}>
-                <motion.div
-                  key={currentPage}
-                  custom={flipDirection || 'next'}
-                  variants={singlePageVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  className="absolute"
-                  style={{
-                    width: designWidth,
-                    height: designHeight,
-                    transformStyle: 'preserve-3d',
-                    backfaceVisibility: 'hidden',
-                    WebkitBackfaceVisibility: 'hidden',
-                  }}
-                >
-                  {renderPageSurface(currentPage, false)}
-
-                  {/* Dynamic page-turn rolling specular shadow/light reflex */}
-                  <motion.div
-                    className="absolute inset-0 pointer-events-none z-20 rounded-xl"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: [0, 0.35, 0] }}
-                    transition={{ duration: 1.2, ease: 'easeInOut' }}
-                    style={{
-                      background: (flipDirection || 'next') === 'next'
-                        ? 'linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(255,255,255,0.12) 30%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0) 100%)'
-                        : 'linear-gradient(-90deg, rgba(0,0,0,0) 0%, rgba(255,255,255,0.12) 30%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0) 100%)',
-                    }}
-                  />
                 </motion.div>
-              </AnimatePresence>
-            </div>
-          )}
+              </>
+            ) : (
+              // ------------------------------------
+              // SINGLE PAGE 3D PORTRAIT VIEWPORT (Mobile Default)
+              // ------------------------------------
+              <>
+                {/* Book hard backboard backing */}
+                <div className="absolute top-0 bottom-0 left-0 right-0 bg-gradient-to-r from-amber-950 to-amber-900 rounded-xl border-x-4 border-y-2 border-amber-800/80 shadow-2xl z-0" />
+
+                {/* Base Underneath Page (Revealed when turning left to Next Page) */}
+                <div className="absolute top-1.5 bottom-1.5 left-1.5 right-1.5 bg-white rounded-lg overflow-hidden z-10 border border-stone-200 select-none shadow-inner">
+                  {currentPage + 1 < pages.length ? (
+                    <img 
+                      src={getPageUrl(currentPage + 1)} 
+                      alt="Static Under Page" 
+                      className="w-full h-full object-fill pointer-events-none"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-gold/40 text-xs p-4 text-center">
+                      <span className="text-2xl mb-2">📖</span>
+                      <p className="font-serif italic font-semibold">End of Book</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Active Flippable Page Layer */}
+                <motion.div
+                  className="absolute top-1.5 bottom-1.5 left-1.5 right-1.5 bg-white rounded-lg overflow-hidden border border-stone-200 cursor-grab active:cursor-grabbing origin-left select-none"
+                  style={{
+                    zIndex: 25,
+                    transformStyle: 'preserve-3d',
+                    rotateY: rotateY,
+                    transformOrigin: 'left center',
+                  }}
+                  drag="x"
+                  dragConstraints={{ left: -300, right: 300 }}
+                  dragElastic={0.15}
+                  dragMomentum={false}
+                  onDragStart={() => setIsFlipping(true)}
+                  onDrag={(_event, info) => {
+                    dragX.set(info.offset.x);
+                  }}
+                  onDragEnd={handleDragEnd}
+                  animate={controls}
+                >
+                  <div className="absolute inset-0 w-full h-full backface-hidden z-10 bg-white">
+                    <img 
+                      src={getPageUrl(currentPage)} 
+                      alt="Active Page Single" 
+                      className="w-full h-full object-fill pointer-events-none"
+                    />
+                    
+                    {/* Shadow overlay that dims the page dynamically as it is dragged and rotated */}
+                    <motion.div 
+                      className="absolute inset-0 bg-black pointer-events-none"
+                      style={{ opacity: pageShadow }}
+                    />
+                  </div>
+
+                  {/* Back face of the page for completing 180deg flip */}
+                  <div 
+                    className="absolute inset-0 w-full h-full bg-stone-100"
+                    style={{ 
+                      transform: 'rotateY(180deg)',
+                      backfaceVisibility: 'hidden',
+                    }}
+                  >
+                    {currentPage + 1 < pages.length ? (
+                      <img 
+                        src={getPageUrl(currentPage + 1)} 
+                        alt="Back Single Page" 
+                        className="w-full h-full object-fill pointer-events-none"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-slate-950" />
+                    )}
+                  </div>
+                </motion.div>
+                
+                {/* Elegant Mobile Touch Hint Overlay */}
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+                  <span className="text-[9px] text-stone-400 bg-slate-950/80 px-2.5 py-1 rounded-full tracking-wider font-sans border border-gold/10 backdrop-blur">
+                    ← Swipe / Drag left to flip page →
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -564,50 +577,12 @@ export default function TactileBook({
       </div>
 
       {/* Offscreen Preloader for adjacent pages to completely eliminate image loading flicker */}
-      <div className="absolute opacity-0 overflow-hidden pointer-events-none" style={{ width: 0, height: 0 }}>
-        {[-3, -2, -1, 1, 2, 3, 4].map((offset) => {
-          const targetIdx = currentPage + offset;
-          if (targetIdx >= 0 && targetIdx < pages.length) {
-            return (
-              <img 
-                key={targetIdx} 
-                src={pages[targetIdx].dataUrl} 
-                alt="preload" 
-                loading="eager"
-              />
-            );
-          }
-          return null;
-        })}
+      <div className="hidden">
+        {currentPage > 0 && <img src={getPageUrl(currentPage - 1)} />}
+        {currentPage + 1 < pages.length && <img src={getPageUrl(currentPage + 1)} />}
+        {currentPage + 2 < pages.length && <img src={getPageUrl(currentPage + 2)} />}
+        {currentPage + 3 < pages.length && <img src={getPageUrl(currentPage + 3)} />}
       </div>
-
-      {/* 3D Page flip animations dynamically defined using global CSS style injection */}
-      <style>{`
-        .backface-hidden {
-          backface-visibility: hidden;
-          -webkit-backface-visibility: hidden;
-        }
-        @keyframes pageFlipNext {
-          0% {
-            transform: rotateY(0deg);
-            box-shadow: 0 0 15px rgba(0,0,0,0.1);
-          }
-          100% {
-            transform: rotateY(-180deg);
-            box-shadow: 0 0 35px rgba(0,0,0,0.4);
-          }
-        }
-        @keyframes pageFlipPrev {
-          0% {
-            transform: rotateY(0deg);
-            box-shadow: 0 0 15px rgba(0,0,0,0.1);
-          }
-          100% {
-            transform: rotateY(180deg);
-            box-shadow: 0 0 35px rgba(0,0,0,0.4);
-          }
-        }
-      `}</style>
     </div>
   );
 }

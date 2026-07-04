@@ -1,560 +1,325 @@
 /**
- * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { PageImage, ReaderMode, ViewLayout, BookMetadata } from './types';
-import {
-  getBookFromCache,
-  saveBookToCache,
-  convertPdfToImages,
-  clearBookCache,
-} from './lib/pdfUtils';
+import { useState, useEffect } from 'react';
+import { ReaderMode, ViewLayout, PageImage } from './types';
+import { renderPdfPages, getBookFromCache, saveBookToCache } from './lib/pdfUtils';
 import BookNavbar from './components/BookNavbar';
 import TactileBook from './components/TactileBook';
 import ScrollBook from './components/ScrollBook';
-import { BookOpen, RefreshCw, AlertTriangle, Upload, FileUp } from 'lucide-react';
+import { BookOpen, RefreshCw, AlertCircle, Loader2, Upload } from 'lucide-react';
 
 export default function App() {
   const [pages, setPages] = useState<PageImage[]>([]);
-  const [metadata, setMetadata] = useState<BookMetadata | null>(null);
-
-  // Loading & Processing feedback states
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadingPage, setLoadingPage] = useState(0);
-  const [loadingTotal, setLoadingTotal] = useState(0);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [urlInput, setUrlInput] = useState('');
-
-  // Layout & Navigation states
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState<number>(0);
   const [mode, setMode] = useState<ReaderMode>('flip');
   const [layout, setLayout] = useState<ViewLayout>('double');
+  
+  // Loading & Error States
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadingProgress, setLoadingProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
+  const [loadingStep, setLoadingStep] = useState<string>('Initializing');
+  const [error, setError] = useState<string | null>(null);
 
-  // Load the PDF automatically on start
+  // Load book PDF automatically on mount
   useEffect(() => {
-    async function loadBook() {
-      setIsLoading(true);
-      setError(null);
-      try {
-        // 1. Check if there's a cached version in IndexedDB
-        const cached = await getBookFromCache();
-
-        // 2. Fetch the PDF automatically (Primary: GitHub, Secondary: Local paths)
-        let filename = 'Pepparappe - Chittattukara Public Library.pdf';
-        let arrayBuffer: ArrayBuffer | null = null;
-        let isSuccess = false;
-
-        // Try GitHub Raw directly (highly performant and supports CORS natively)
-        try {
-          const githubRawUrl = 'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/main/pepparappe.pdf';
-          const response = await fetch(githubRawUrl);
-          if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
-            const tempBuffer = await response.arrayBuffer();
-            const uint8 = new Uint8Array(tempBuffer);
-            const isPdf = uint8.length >= 5 &&
-                          uint8[0] === 0x25 &&
-                          uint8[1] === 0x50 &&
-                          uint8[2] === 0x44 &&
-                          uint8[3] === 0x46 &&
-                          uint8[4] === 0x2d; // %PDF-
-            if (isPdf && tempBuffer.byteLength > 1000) {
-              arrayBuffer = tempBuffer;
-              isSuccess = true;
-            }
-          }
-        } catch (e) {
-          console.warn('Failed to fetch from GitHub raw URL directly:', e);
-        }
-
-        // Try GitHub Raw with CORS proxy if direct fetch failed
-        if (!isSuccess) {
-          try {
-            const githubRawUrl = 'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/main/pepparappe.pdf';
-            const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(githubRawUrl)}`;
-            const response = await fetch(proxiedUrl);
-            if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
-              const tempBuffer = await response.arrayBuffer();
-              const uint8 = new Uint8Array(tempBuffer);
-              const isPdf = uint8.length >= 5 &&
-                            uint8[0] === 0x25 &&
-                            uint8[1] === 0x50 &&
-                            uint8[2] === 0x44 &&
-                            uint8[3] === 0x46 &&
-                            uint8[4] === 0x2d; // %PDF-
-              if (isPdf && tempBuffer.byteLength > 1000) {
-                arrayBuffer = tempBuffer;
-                isSuccess = true;
-              }
-            }
-          } catch (e) {
-            console.warn('Failed to fetch from GitHub raw URL via CORS proxy:', e);
-          }
-        }
-
-        // Fallback to local /pepparappe.pdf
-        if (!isSuccess) {
-          try {
-            const response = await fetch('/pepparappe.pdf');
-            if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
-              const tempBuffer = await response.arrayBuffer();
-              const uint8 = new Uint8Array(tempBuffer);
-              const isPdf = uint8.length >= 5 &&
-                            uint8[0] === 0x25 &&
-                            uint8[1] === 0x50 &&
-                            uint8[2] === 0x44 &&
-                            uint8[3] === 0x46 &&
-                            uint8[4] === 0x2d; // %PDF-
-              if (isPdf && tempBuffer.byteLength > 1000) {
-                arrayBuffer = tempBuffer;
-                isSuccess = true;
-              }
-            }
-          } catch (e) {
-            console.warn('Failed to fetch /pepparappe.pdf automatically:', e);
-          }
-        }
-
-        // Fallback to local /pepperappe.pdf
-        if (!isSuccess) {
-          try {
-            const response = await fetch('/pepperappe.pdf');
-            filename = 'Pepperappe - Chittattukara Public Library.pdf';
-            if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
-              const tempBuffer = await response.arrayBuffer();
-              const uint8 = new Uint8Array(tempBuffer);
-              const isPdf = uint8.length >= 5 &&
-                            uint8[0] === 0x25 &&
-                            uint8[1] === 0x50 &&
-                            uint8[2] === 0x44 &&
-                            uint8[3] === 0x46 &&
-                            uint8[4] === 0x2d; // %PDF-
-              if (isPdf && tempBuffer.byteLength > 1000) {
-                arrayBuffer = tempBuffer;
-                isSuccess = true;
-              }
-            }
-          } catch (e) {
-            console.warn('Failed to fetch /pepperappe.pdf automatically:', e);
-          }
-        }
-
-        if (isSuccess && arrayBuffer) {
-          const size = arrayBuffer.byteLength;
-
-          // If cache exists and has matching file size, load it instantly!
-          if (cached && cached.metadata && cached.metadata.size === size && cached.pages?.length > 0) {
-            setPages(cached.pages);
-            setMetadata(cached.metadata);
-            setIsLoading(false);
-            return;
-          }
-
-          // Otherwise, parse and render the PDF pages into high-resolution images
-          const bookMeta: BookMetadata = {
-            name: filename,
-            size: size,
-            totalPages: 44, // Initial guess, will be updated below
-          };
-
-          const renderedPages = await convertPdfToImages(arrayBuffer, (pageIdx, total, progress) => {
-            setLoadingPage(pageIdx);
-            setLoadingTotal(total);
-            setLoadingProgress(progress);
-          });
-
-          if (renderedPages.length === 0) {
-            throw new Error('This PDF contains no readable pages.');
-          }
-
-          bookMeta.totalPages = renderedPages.length;
-
-          setPages(renderedPages);
-          setMetadata(bookMeta);
-          await saveBookToCache(bookMeta, renderedPages);
-        } else {
-          // Fetch failed (e.g. file not uploaded yet). Use cache as fallback if available.
-          if (cached && cached.pages && cached.pages.length > 0) {
-            setPages(cached.pages);
-            setMetadata(cached.metadata);
-          } else {
-            throw new Error("Could not load a valid '/pepparappe.pdf' or '/pepperappe.pdf'. Make sure you copy your PDF file inside the 'public/' directory before committing to GitHub or deploying to Vercel.");
-          }
-        }
-      } catch (err: any) {
-        console.error('Failed to compile PDF storybook:', err);
-        setError(err?.message || 'An error occurred while compiling your PDF storybook.');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
     loadBook();
   }, []);
 
-  // Clear cache and force reload
-  const handleClearCacheAndReload = async () => {
-    setIsLoading(true);
-    setError(null);
+  const loadBook = async () => {
     try {
-      await clearBookCache();
-      window.location.reload();
-    } catch (err) {
-      console.error(err);
-      window.location.reload();
-    }
-  };
+      setIsLoading(true);
+      setError(null);
+      setLoadingStep('Checking local memory cache...');
 
-  // Upload/process manual PDF file
-  const handleFileUpload = async (file: File) => {
-    if (!file) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuffer);
-      const isPdf = uint8.length >= 5 &&
-                    uint8[0] === 0x25 &&
-                    uint8[1] === 0x50 &&
-                    uint8[2] === 0x44 &&
-                    uint8[3] === 0x46 &&
-                    uint8[4] === 0x2d; // %PDF-
-
-      if (!isPdf) {
-        throw new Error('The selected file is not a valid PDF document.');
+      // 1. Try loading from IndexedDB first for instant refresh loading
+      const cachedPages = await getBookFromCache('pepparappe');
+      if (cachedPages && cachedPages.length > 0) {
+        setPages(cachedPages);
+        setIsLoading(false);
+        return;
       }
 
-      const size = arrayBuffer.byteLength;
-      const filename = file.name;
-
-      const bookMeta: BookMetadata = {
-        name: filename,
-        size: size,
-        totalPages: 44, // Initial guess, will be updated below
-      };
-
-      const renderedPages = await convertPdfToImages(arrayBuffer, (pageIdx, total, progress) => {
-        setLoadingPage(pageIdx);
-        setLoadingTotal(total);
-        setLoadingProgress(progress);
+      // 2. Fetch the PDF automatically (using robust multiple strategies and generous timeout to prevent hanging or aborting on slow networks)
+      setLoadingStep('Downloading Chittattukara Balavedi Magazine...');
+      
+      const candidates = [
+        'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/main/pepparappe.pdf',
+        'https://raw.githubusercontent.com/jithin0000/StoryBookLib/main/pepparappe.pdf',
+        'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/master/pepparappe.pdf',
+        'https://raw.githubusercontent.com/jithin0000/StoryBookLib/master/pepparappe.pdf',
+        'https://raw.githubusercontent.com/JithinM/StoryBookLibChitatukkara/main/pepparappe.pdf',
+        'https://raw.githubusercontent.com/JithinM/StoryBookLib/main/pepparappe.pdf'
+      ];
+      
+      // Define all download sources and proxies to try
+      const fetchStrategies: { name: string; url: string }[] = [];
+      
+      // We push the direct connection first for all candidates (fast, fail-early)
+      candidates.forEach((candidate, index) => {
+        fetchStrategies.push({
+          name: `Direct GitHub Connection (Source ${index + 1})`,
+          url: candidate
+        });
       });
 
-      if (renderedPages.length === 0) {
-        throw new Error('This PDF contains no readable pages.');
-      }
-
-      bookMeta.totalPages = renderedPages.length;
-
-      setPages(renderedPages);
-      setMetadata(bookMeta);
-      await saveBookToCache(bookMeta, renderedPages);
-    } catch (err: any) {
-      console.error('Failed to parse uploaded PDF:', err);
-      setError(err?.message || 'An error occurred while compiling your PDF.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      await handleFileUpload(files[0]);
-    }
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      await handleFileUpload(files[0]);
-    }
-  };
-
-  // Download and load a PDF from a direct URL (handles Google Drive, Dropbox and normal links)
-  const handleLoadFromUrl = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!urlInput.trim()) return;
-
-    setIsLoading(true);
-    setError(null);
-    setLoadingProgress(0);
-
-    try {
-      let targetUrl = urlInput.trim();
-
-      // Convert Google Drive sharing link to a direct download link
-      const driveIdMatch = targetUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || targetUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-      if (driveIdMatch) {
-        const fileId = driveIdMatch[1];
-        targetUrl = `https://docs.google.com/uc?export=download&id=${fileId}`;
-      }
-
-      // Convert Dropbox link from preview to direct download
-      if (targetUrl.includes('dropbox.com') && targetUrl.includes('dl=0')) {
-        targetUrl = targetUrl.replace('dl=0', 'dl=1');
-      }
-
-      // Prepend CORS proxy to bypass cross-origin block on the client side
-      const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-
-      // Fetch the file
-      const response = await fetch(proxiedUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to download file: Server responded with status ${response.status}`);
-      }
-
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('text/html')) {
-        throw new Error('Received an HTML page instead of a PDF file. Please verify this is a publicly shared, direct download link.');
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuffer);
-      const isPdf = uint8.length >= 5 &&
-                    uint8[0] === 0x25 &&
-                    uint8[1] === 0x50 &&
-                    uint8[2] === 0x44 &&
-                    uint8[3] === 0x46 &&
-                    uint8[4] === 0x2d; // %PDF-
-
-      if (!isPdf) {
-        throw new Error('The downloaded file is not a valid PDF document.');
-      }
-
-      const size = arrayBuffer.byteLength;
-      const filename = driveIdMatch ? 'Google Drive Manuscript' : 'Remote Manuscript';
-
-      const bookMeta: BookMetadata = {
-        name: filename,
-        size: size,
-        totalPages: 44,
-      };
-
-      const renderedPages = await convertPdfToImages(arrayBuffer, (pageIdx, total, progress) => {
-        setLoadingPage(pageIdx);
-        setLoadingTotal(total);
-        setLoadingProgress(progress);
+      // Then we push the proxy options to bypass CORS/network restrictions
+      candidates.forEach((candidate, index) => {
+        fetchStrategies.push({
+          name: `Google Content Proxy (Source ${index + 1})`,
+          url: `https://images1-focus-opensocial.googleusercontent.com/gadgets/proxy?container=focus&refresh=2592000&url=${encodeURIComponent(candidate)}`
+        });
+        fetchStrategies.push({
+          name: `CORS.IO Secure Gateway (Source ${index + 1})`,
+          url: `https://corsproxy.io/?${encodeURIComponent(candidate)}`
+        });
+        fetchStrategies.push({
+          name: `AllOrigins Public Mirror (Source ${index + 1})`,
+          url: `https://api.allorigins.win/raw?url=${encodeURIComponent(candidate)}`
+        });
       });
 
-      if (renderedPages.length === 0) {
-        throw new Error('This PDF contains no readable pages.');
-      }
-
-      bookMeta.totalPages = renderedPages.length;
-
-      setPages(renderedPages);
-      setMetadata(bookMeta);
-      await saveBookToCache(bookMeta, renderedPages);
-    } catch (err: any) {
-      console.error('Failed to load PDF from URL:', err);
-      setError(err?.message || 'Failed to download or compile the PDF. Please verify your link is public and try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Set reader defaults based on screen size on book load
-  useEffect(() => {
-    if (pages.length > 0) {
-      const handleResponsiveDefaults = () => {
-        if (window.innerWidth < 768) {
-          setLayout('single');
-        } else {
-          setLayout('double');
+      const fetchWithTimeout = async (url: string, timeoutMs = 25000): Promise<ArrayBuffer> => {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(id);
+          if (!response.ok) {
+            throw new Error(`HTTP Error ${response.status}: ${response.statusText}`);
+          }
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('text/html')) {
+            throw new Error('Received HTML webpage instead of PDF document');
+          }
+          const buffer = await response.arrayBuffer();
+          // Basic PDF magic bytes validation (%PDF-)
+          const uint8 = new Uint8Array(buffer);
+          const isPdf = uint8.length >= 5 &&
+                        uint8[0] === 0x25 &&
+                        uint8[1] === 0x50 &&
+                        uint8[2] === 0x44 &&
+                        uint8[3] === 0x46 &&
+                        uint8[4] === 0x2d;
+          if (!isPdf) {
+            throw new Error('Downloaded file is not a valid PDF document');
+          }
+          if (buffer.byteLength < 1000) {
+            throw new Error('Downloaded file is too small to be a valid PDF');
+          }
+          return buffer;
+        } catch (err) {
+          clearTimeout(id);
+          throw err;
         }
       };
+
+      let arrayBuffer: ArrayBuffer | null = null;
+      let lastErrorMessage = '';
+
+      for (const strategy of fetchStrategies) {
+        try {
+          setLoadingStep(`Contacting ${strategy.name}...`);
+          arrayBuffer = await fetchWithTimeout(strategy.url, 25000);
+          break; // successfully downloaded!
+        } catch (e: any) {
+          console.warn(`Strategy ${strategy.name} failed:`, e);
+          lastErrorMessage = e.message || String(e);
+        }
+      }
+
+      if (!arrayBuffer) {
+        throw new Error(`Could not load PDF magazine after trying direct links and CORS mirrors. (Last error: ${lastErrorMessage})`);
+      }
+
+      // 3. Render PDF Pages using PDF.JS
+      setLoadingStep('Compiling and rendering PDF pages...');
+      const renderedPages = await renderPdfPages(arrayBuffer, (current, total) => {
+        setLoadingProgress({ current, total });
+        setLoadingStep(`Rendering page ${current} of ${total}...`);
+      });
+
+      if (renderedPages.length === 0) {
+        throw new Error('Compiled book contains 0 pages.');
+      }
+
+      // Save to IndexedDB Cache
+      await saveBookToCache(renderedPages, 'pepparappe');
       
-      handleResponsiveDefaults();
-      window.addEventListener('resize', handleResponsiveDefaults);
-      return () => window.removeEventListener('resize', handleResponsiveDefaults);
+      setPages(renderedPages);
+      setIsLoading(false);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'An unexpected error occurred compiling the storybook PDF.');
+      setIsLoading(false);
     }
-  }, [pages.length]);
+  };
 
-  if (pages.length === 0) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-stone-100 flex flex-col font-sans selection:bg-gold/30 selection:text-gold antialiased overflow-hidden">
-        <main className="flex-1 w-full flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
-          {isLoading ? (
-            <div className="flex flex-col items-center gap-6 p-8 bg-slate-900/60 rounded-2xl border border-gold/15 shadow-xl max-w-md w-full">
-              <div className="relative w-16 h-16 flex items-center justify-center">
-                <RefreshCw className="w-10 h-10 text-gold animate-spin stroke-[1.5]" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-serif italic text-xl text-gold font-medium">Compiling Manuscript...</h3>
-                {loadingTotal > 0 ? (
-                  <p className="text-sm text-stone-400 font-mono">
-                    Rendering Page {loadingPage} of {loadingTotal} ({loadingProgress}%)
-                  </p>
-                ) : (
-                  <p className="text-sm text-stone-400">Reading manuscript PDF and preparing high-resolution pages...</p>
-                )}
-              </div>
-              {loadingTotal > 0 && (
-                <div className="w-full bg-slate-950 rounded-full h-1.5 border border-gold/5 overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-amber-600 to-gold h-full rounded-full transition-all duration-300"
-                    style={{ width: `${loadingProgress}%` }}
-                  />
-                </div>
-              )}
-            </div>
-          ) : (
-            <div 
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={`flex flex-col items-center gap-6 p-8 rounded-2xl border transition-all duration-300 shadow-xl max-w-lg w-full animate-fade-in ${
-                isDragging 
-                  ? 'border-gold bg-gold/5 scale-[1.02] shadow-gold/5' 
-                  : error && error.includes('Could not load')
-                    ? 'border-red-500/20 bg-slate-900/60'
-                    : 'border-amber-500/20 bg-slate-900/60'
-              }`}
-            >
-              {error && error.includes('Could not load') ? (
-                <>
-                  <div className="w-14 h-14 rounded-full bg-red-950/40 flex items-center justify-center border border-red-900/30 animate-pulse">
-                    <BookOpen className="w-6 h-6 text-red-400 stroke-[1.5]" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="font-serif italic text-xl text-gold font-medium">Manuscript Not Found on Server</h3>
-                    <p className="text-xs text-stone-300 leading-relaxed px-4">
-                      Vercel could not locate your <code className="px-1.5 py-0.5 bg-slate-950 text-gold rounded font-mono text-[10px] border border-gold/10">pepparappe.pdf</code> file in the <code className="px-1.5 py-0.5 bg-slate-950 text-gold rounded font-mono text-[10px] border border-gold/10">public/</code> directory.
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="w-14 h-14 rounded-full bg-amber-950/40 flex items-center justify-center border border-amber-900/30">
-                    <AlertTriangle className="w-6 h-6 text-amber-400 stroke-[1.5]" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="font-serif italic text-xl text-amber-400 font-medium">Invalid PDF Structure</h3>
-                    <p className="text-xs text-stone-300 leading-relaxed px-4">
-                      The downloaded file is not a valid PDF. If you are using <strong>Git LFS</strong>, Vercel might have downloaded the tiny 130-byte LFS pointer file instead of the actual 24MB PDF.
-                    </p>
-                  </div>
-                </>
-              )}
+  const handlePageChange = (index: number) => {
+    if (index >= 0 && index < pages.length) {
+      setCurrentPage(index);
+    }
+  };
 
-              {error && (
-                <div className="w-full p-3 bg-slate-950/50 rounded-lg border border-red-950/30 text-left">
-                  <p className="text-xs text-stone-400 font-mono break-all line-clamp-3">Error details: {error}</p>
-                </div>
-              )}
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    try {
+      setIsLoading(true);
+      setError(null);
+      setLoadingStep(`Reading file: ${file.name}...`);
+      
+      const arrayBuffer = await file.arrayBuffer();
+      
+      // Basic PDF magic bytes validation (%PDF-)
+      const uint8 = new Uint8Array(arrayBuffer);
+      const isPdf = uint8.length >= 5 &&
+                    uint8[0] === 0x25 &&
+                    uint8[1] === 0x50 &&
+                    uint8[2] === 0x44 &&
+                    uint8[3] === 0x46 &&
+                    uint8[4] === 0x2d;
+      if (!isPdf) {
+        throw new Error('Selected file is not a valid PDF document');
+      }
 
-              {/* Seamless Drag & Drop / Click to Upload Fallback */}
-              <div className="w-full space-y-4">
-                <div className="relative flex flex-col items-center justify-center p-6 border border-dashed border-gold/20 hover:border-gold/40 rounded-xl bg-slate-950/40 transition duration-200 group cursor-pointer">
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={handleFileChange}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  />
-                  <FileUp className="w-8 h-8 text-gold/60 group-hover:text-gold transition-colors duration-200 mb-2 stroke-[1.5] group-hover:scale-110 transform" />
-                  <p className="text-xs font-medium text-gold/80 group-hover:text-gold transition-colors duration-200">
-                    Drag & Drop or Click to Select PDF
-                  </p>
-                  <p className="text-[10px] text-stone-500 mt-1">
-                    Select <code className="text-stone-400">pepparappe.pdf</code> from your device to load instantly
-                  </p>
-                </div>
+      setLoadingStep('Compiling and rendering PDF pages...');
+      const renderedPages = await renderPdfPages(arrayBuffer, (current, total) => {
+        setLoadingProgress({ current, total });
+        setLoadingStep(`Rendering page ${current} of ${total}...`);
+      });
 
-                <div className="flex items-center">
-                  <div className="flex-1 border-t border-stone-800"></div>
-                  <span className="px-3 text-[10px] font-semibold tracking-wider text-stone-600 uppercase">OR</span>
-                  <div className="flex-1 border-t border-stone-800"></div>
-                </div>
+      if (renderedPages.length === 0) {
+        throw new Error('The selected PDF contains 0 pages.');
+      }
 
-                {/* Load from URL Form */}
-                <form onSubmit={handleLoadFromUrl} className="space-y-2">
-                  <div className="flex flex-col gap-1 text-left">
-                    <label className="text-[10px] font-medium tracking-wide text-gold/80 uppercase">
-                      Load from Google Drive or PDF Link
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="url"
-                        placeholder="Paste public Google Drive or Dropbox link..."
-                        value={urlInput}
-                        onChange={(e) => setUrlInput(e.target.value)}
-                        className="flex-1 px-3 py-2 bg-slate-950 border border-stone-800 rounded-lg text-xs text-stone-200 placeholder-stone-600 focus:outline-none focus:border-gold/40 transition duration-150"
-                      />
-                      <button
-                        type="submit"
-                        disabled={!urlInput.trim()}
-                        className="px-4 py-2 bg-gradient-to-r from-gold to-amber-500 hover:from-amber-500 hover:to-gold disabled:opacity-50 text-slate-950 rounded-lg font-medium text-xs transition duration-150 shadow-md font-sans active:scale-95 cursor-pointer flex items-center justify-center whitespace-nowrap"
-                      >
-                        Load Link
-                      </button>
-                    </div>
-                    <p className="text-[9px] text-stone-500 leading-normal">
-                      Paste a public sharing link. Our secure pipeline automatically bypasses CORS locks.
-                    </p>
-                  </div>
-                </form>
-
-                <div className="flex justify-center gap-3 pt-2">
-                  <button
-                    onClick={handleClearCacheAndReload}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-900 text-stone-300 rounded-lg border border-gold/10 font-medium text-xs transition duration-200 active:scale-95 cursor-pointer"
-                  >
-                    <RefreshCw className="w-3 h-3 text-gold" />
-                    Reset Cache & Reload
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </main>
-      </div>
-    );
-  }
+      await saveBookToCache(renderedPages, 'pepparappe');
+      setPages(renderedPages);
+      setCurrentPage(0);
+      setIsLoading(false);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to parse upload PDF.');
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-stone-100 flex flex-col font-sans selection:bg-gold/30 selection:text-gold antialiased overflow-hidden">
-      {/* Display PDF reader navbar once a book is parsed and loaded */}
-      {pages.length > 0 && (
-        <BookNavbar
-          mode={mode}
-          onModeChange={setMode}
-          fileName={metadata?.name || ''}
-        />
-      )}
+    <div className="w-full h-full flex flex-col bg-slate-950 text-stone-100 select-none overflow-hidden">
+      {/* Top Navbar */}
+      <BookNavbar
+        mode={mode}
+        onModeChange={setMode}
+        fileName="Chittattukara Balavedi Magazine"
+      />
 
-      <main className="flex-1 w-full flex flex-col relative overflow-hidden">
-        {mode === 'flip' ? (
-          /* Immersive 3D paper flipping layout */
-          <TactileBook
-            pages={pages}
-            currentPage={currentPage}
-            onPageChange={setCurrentPage}
-            layout={layout}
-            onLayoutChange={setLayout}
-          />
-        ) : (
-          /* Staggered vertical scroll cinematic layout */
-          <ScrollBook
-            pages={pages}
-            layout={layout}
-            onLayoutChange={setLayout}
-            onPageChange={setCurrentPage}
-          />
+      {/* Main Content Area */}
+      <main className="flex-1 w-full flex flex-col overflow-hidden relative" id="storybook-main-container">
+        
+        {/* LOADING PROGRESS VIEW */}
+        {isLoading && (
+          <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none animate-fade-in">
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-amber-700/50 to-gold/70 flex items-center justify-center border border-gold/20 shadow-2xl mb-8 animate-pulse-subtle">
+              <BookOpen className="w-10 h-10 text-gold" />
+            </div>
+            
+            <h2 className="font-serif italic text-2xl text-gold font-semibold mb-2">
+              ഭാവനയുടെ പുതിയ ലോകത്തേക്ക്...
+            </h2>
+            <p className="text-stone-400 text-sm max-w-sm mb-8 leading-relaxed">
+              Preparing the tactile storybook experience.
+            </p>
+
+            {/* Custom Interactive Progress Bar */}
+            <div className="w-full max-w-xs bg-slate-900 border border-gold/10 p-4 rounded-xl shadow-lg flex flex-col items-center gap-3">
+              <div className="w-full flex items-center justify-between text-[11px] font-mono text-stone-400">
+                <span className="truncate max-w-[200px] text-left text-gold/80 font-semibold">{loadingStep}</span>
+                {loadingProgress.total > 0 && (
+                  <span>{Math.round((loadingProgress.current / loadingProgress.total) * 100)}%</span>
+                )}
+              </div>
+              
+              <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden p-0.5 border border-gold/5">
+                <div 
+                  className="bg-gradient-to-r from-amber-600 via-gold to-amber-500 h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: loadingProgress.total > 0 
+                      ? `${(loadingProgress.current / loadingProgress.total) * 100}%`
+                      : '20%'
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 text-[10px] text-stone-500 font-sans tracking-wide">
+                <Loader2 className="w-3 h-3 animate-spin text-gold/75" />
+                <span>Downloading assets. Do not close this tab.</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ERROR SCREEN */}
+        {error && !isLoading && (
+          <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none overflow-y-auto">
+            <div className="w-16 h-16 rounded-full bg-red-950/40 flex items-center justify-center border border-red-500/20 shadow-xl mb-6">
+              <AlertCircle className="w-8 h-8 text-red-500" />
+            </div>
+            <h2 className="font-serif italic text-xl sm:text-2xl text-red-400 font-semibold mb-2">
+              Failed to auto-load PDF storybook
+            </h2>
+            <p className="text-stone-400 text-xs sm:text-sm max-w-md mb-8 leading-relaxed">
+              {error}
+            </p>
+            
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full max-w-md justify-center">
+              {/* Retry Download button */}
+              <button
+                onClick={loadBook}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 hover:bg-slate-800 border border-gold/20 hover:border-gold text-gold font-bold rounded-xl shadow-lg active:scale-95 transition-all cursor-pointer font-sans text-xs tracking-wider uppercase"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Retry Download
+              </button>
+
+              {/* Upload PDF button */}
+              <label className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-gold to-amber-500 hover:from-amber-500 hover:to-gold text-slate-950 font-bold rounded-xl shadow-lg active:scale-95 transition-all cursor-pointer font-sans text-xs tracking-wider uppercase">
+                <Upload className="w-4 h-4 stroke-[2.5]" />
+                <span>Upload Local PDF</span>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            <div className="mt-12 max-w-sm border-t border-gold/10 pt-4 text-[11px] text-stone-500">
+              <p>You can also upload any PDF book to enjoy our interactive, realistic 3D turning or scroll layout.</p>
+            </div>
+          </div>
+        )}
+
+        {/* READER VIEWPORT */}
+        {!isLoading && !error && pages.length > 0 && (
+          mode === 'flip' ? (
+            <TactileBook
+              pages={pages}
+              layout={layout}
+              currentPage={currentPage}
+              onPageChange={handlePageChange}
+              onLayoutChange={setLayout}
+            />
+          ) : (
+            <ScrollBook
+              pages={pages}
+              layout={layout}
+              onLayoutChange={setLayout}
+              onPageChange={handlePageChange}
+            />
+          )
         )}
       </main>
     </div>

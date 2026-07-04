@@ -1,12 +1,11 @@
 /**
- * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { PageImage, ViewLayout } from '../types';
 import { Layers, RefreshCw } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 
 interface ScrollBookProps {
   pages: PageImage[];
@@ -29,88 +28,64 @@ export default function ScrollBook({ pages, layout, onLayoutChange, onPageChange
 
   const activeLayout = isMobile ? 'single' : layout;
 
-  // Group pages into double page spreads if 2-page layout is active
   const renderPages = () => {
     if (activeLayout === 'double') {
-      const spreads: PageImage[][] = [];
-      // Page 0 (Cover) is centered as a single page spread
+      // Group pages into spreads (cover, then pairs, then back cover)
+      const spreads: Array<PageImage[]> = [];
+      
+      // Cover page (Page 0) is solo
       spreads.push([pages[0]]);
-
-      // Remaining pages are grouped into pairs (Left page, Right page)
-      for (let i = 1; i < pages.length; i += 2) {
-        const pair = [pages[i]];
+      
+      // Subsequent pages in pairs
+      for (let i = 1; i < pages.length - 1; i += 2) {
         if (i + 1 < pages.length) {
-          pair.push(pages[i + 1]);
+          spreads.push([pages[i], pages[i + 1]]);
+        } else {
+          spreads.push([pages[i]]);
         }
-        spreads.push(pair);
+      }
+
+      // Back cover is solo if it wasn't already paired
+      if (pages.length > 1 && pages.length % 2 === 0) {
+        spreads.push([pages[pages.length - 1]]);
       }
 
       return (
-        <div className="flex flex-col items-center gap-16 py-8 px-4 w-full max-w-6xl animate-fade-in">
-          {spreads.map((spread, sIdx) => (
-            <motion.div
-              key={sIdx}
-              id={`scroll-spread-${sIdx}`}
-              initial={{ opacity: 0, y: 40, rotateX: 2 }}
-              whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
-              viewport={{ once: true, margin: '-100px' }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-              className={`flex flex-wrap justify-center items-center gap-4 md:gap-0 w-full relative ${
-                spread.length === 2 ? 'perspective-[1500px]' : ''
-              }`}
-            >
-              {spread.map((page, pIdx) => {
-                const isLeft = spread.length === 2 && pIdx === 0;
-                const isRight = spread.length === 2 && pIdx === 1;
-
-                return (
-                  <div
+        <div className="flex flex-col items-center gap-16 py-8 w-full max-w-5xl animate-fade-in">
+          {spreads.map((spread, sIndex) => (
+            <div key={sIndex} className="flex flex-col items-center gap-3 w-full">
+              <div className="flex justify-center items-stretch bg-slate-900/30 p-4 rounded-2xl border border-gold/5 shadow-2xl backdrop-blur-sm max-w-full">
+                {spread.map((page) => (
+                  <motion.div
                     key={page.index}
-                    className="relative bg-paper-light border border-amber-900/10 shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl max-w-full"
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-100px' }}
+                    transition={{ duration: 0.5 }}
+                    className="relative overflow-hidden select-none flex-1 max-w-[450px]"
                     style={{
-                      width: '420px',
-                      aspectRatio: '420 / 590',
-                      borderRadius: isLeft
-                        ? '10px 2px 2px 10px'
-                        : isRight
-                        ? '2px 10px 10px 2px'
-                        : '8px',
+                      aspectRatio: `${page.width} / ${page.height}`,
                     }}
                   >
-                    {/* Spine shading overlay inside double page spreads */}
-                    {isLeft && (
-                      <div className="absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-black/15 to-transparent pointer-events-none z-10" />
-                    )}
-                    {isRight && (
-                      <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-black/15 to-transparent pointer-events-none z-10" />
-                    )}
-
-                    {/* Fluid high-resolution page image */}
                     <img
-                      src={page.dataUrl}
+                      src={page.url}
                       alt={`Page ${page.index + 1}`}
-                      className="w-full h-full object-contain pointer-events-none"
-                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-contain pointer-events-none rounded shadow-md border border-slate-950"
+                      loading="lazy"
                     />
-
-                    {/* Paper grain visual asset layering */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-black/5 mix-blend-overlay pointer-events-none" />
-
-                    {/* Outer frame borders */}
-                    <div className="absolute inset-0 pointer-events-none border border-black/5" />
-
-                    {/* Standard margin footer with page indexes */}
-                    <div
-                      className={`absolute bottom-3 font-mono text-xs text-amber-900/40 ${
-                        isLeft ? 'left-6' : 'right-6'
-                      }`}
-                    >
-                      {page.index + 1}
+                    <div className="absolute bottom-2 right-3 font-mono text-[10px] bg-slate-950/70 border border-gold/10 px-2 py-0.5 rounded text-gold/80">
+                      Page {page.index + 1}
                     </div>
-                  </div>
-                );
-              })}
-            </motion.div>
+                  </motion.div>
+                ))}
+              </div>
+              <div className="text-center font-mono text-[11px] text-stone-500">
+                {spread.length === 2 
+                  ? `Pages ${spread[0].index + 1} - ${spread[1].index + 1}`
+                  : `Page ${spread[0].index + 1}`
+                }
+              </div>
+            </div>
           ))}
         </div>
       );
@@ -122,26 +97,25 @@ export default function ScrollBook({ pages, layout, onLayoutChange, onPageChange
         {pages.map((page) => (
           <motion.div
             key={page.index}
-            id={`scroll-page-${page.index}`}
-            initial={{ opacity: 0, y: 35, scale: 0.96 }}
-            whileInView={{ opacity: 1, y: 0, scale: 1 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
-            className="relative bg-paper-light border border-amber-900/10 shadow-lg hover:shadow-xl rounded-xl overflow-hidden w-full"
-            style={{
-              aspectRatio: '430 / 610',
-            }}
+            initial={{ opacity: 0, y: 25 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-50px' }}
+            transition={{ duration: 0.4 }}
+            className="flex flex-col items-center gap-2.5 w-full bg-slate-900/20 p-2 sm:p-3.5 rounded-xl border border-gold/5 shadow-xl"
           >
-            <img
-              src={page.dataUrl}
-              alt={`Page ${page.index + 1}`}
-              className="w-full h-full object-contain pointer-events-none"
-              referrerPolicy="no-referrer"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-black/5 mix-blend-overlay pointer-events-none" />
-            <div className="absolute inset-0 pointer-events-none border border-black/5" />
-            <div className="absolute bottom-3 right-6 font-mono text-xs text-amber-900/40">
-              {page.index + 1}
+            <div 
+              className="relative w-full rounded-md overflow-hidden shadow-lg border border-slate-950"
+              style={{ aspectRatio: `${page.width} / ${page.height}` }}
+            >
+              <img
+                src={page.url}
+                alt={`Page ${page.index + 1}`}
+                className="w-full h-full object-contain pointer-events-none"
+                loading="lazy"
+              />
+            </div>
+            <div className="font-mono text-[10px] text-stone-500 tracking-wider">
+              PAGE {page.index + 1} / {pages.length}
             </div>
           </motion.div>
         ))}
@@ -162,32 +136,32 @@ export default function ScrollBook({ pages, layout, onLayoutChange, onPageChange
           </span>
         </div>
 
-        {/* View Mode controls - hidden on mobile */}
+        {/* Column switch controls (hidden on mobile) */}
         {!isMobile && (
-          <div className="flex items-center gap-2 bg-stone-900/80 p-1 rounded-lg border border-gold/10 shadow-inner">
+          <div className="flex items-center gap-1.5 bg-slate-900/80 p-1 rounded-lg border border-gold/5">
             <button
-              id="scroll-toggle-single"
               onClick={() => onLayoutChange('single')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium font-sans tracking-wide transition-all ${
+              className={`p-1.5 rounded text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
                 layout === 'single'
-                  ? 'bg-gold/20 text-gold border border-gold/30 shadow'
-                  : 'text-stone-400 hover:text-stone-200 border border-transparent'
+                  ? 'bg-gold/15 text-gold border border-gold/25 shadow-inner'
+                  : 'text-stone-400 hover:text-stone-200'
               }`}
+              title="Single Page Scrolling"
             >
-              <Layers className="w-3.5 h-3.5" />
-              1 Page Column
+              <Layers className="w-3.5 h-3.5 rotate-90" />
+              <span>Single</span>
             </button>
             <button
-              id="scroll-toggle-double"
               onClick={() => onLayoutChange('double')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium font-sans tracking-wide transition-all ${
+              className={`p-1.5 rounded text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
                 layout === 'double'
-                  ? 'bg-gold/20 text-gold border border-gold/30 shadow'
-                  : 'text-stone-400 hover:text-stone-200 border border-transparent'
+                  ? 'bg-gold/15 text-gold border border-gold/25 shadow-inner'
+                  : 'text-stone-400 hover:text-stone-200'
               }`}
+              title="Double Page Spreads"
             >
               <Layers className="w-3.5 h-3.5" />
-              2 Pages Spread
+              <span>Spreads</span>
             </button>
           </div>
         )}

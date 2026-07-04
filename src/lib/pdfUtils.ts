@@ -1,147 +1,123 @@
 /**
- * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { PageImage, BookMetadata } from '../types';
+import { PageImage } from '../types';
 
-const DB_NAME = 'StorybookPDFDB';
-const STORE_NAME = 'books';
-const KEY_NAME = 'current_book';
+// IndexedDB Helper for Book Caching
+const DB_NAME = 'StorybookReaderDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'RenderedBooks';
 
-/**
- * Open or upgrade the IndexedDB database for caching rendered page images.
- */
-export function openDB(): Promise<IDBDatabase> {
+function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = (e) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
   });
 }
 
-/**
- * Persists book pages and metadata in IndexedDB.
- */
-export async function saveBookToCache(metadata: BookMetadata, pages: PageImage[]): Promise<void> {
-  const db = await openDB();
-  return new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const request = store.put({ metadata, pages }, KEY_NAME);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-}
-
-/**
- * Retrieves the cached book and pages from IndexedDB.
- */
-export async function getBookFromCache(): Promise<{ metadata: BookMetadata; pages: PageImage[] } | null> {
+export async function getBookFromCache(bookId: string = 'pepparappe'): Promise<PageImage[] | null> {
   try {
     const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const request = store.get(KEY_NAME);
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
+    return new Promise((resolve) => {
+      const transaction = db.transaction(STORE_NAME, 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get(bookId);
+      request.onerror = () => resolve(null);
+      request.onsuccess = () => {
+        if (request.result) {
+          resolve(request.result.pages);
+        } else {
+          resolve(null);
+        }
+      };
     });
   } catch (error) {
-    console.error('Failed to retrieve cached book from IndexedDB:', error);
+    console.error('Failed to get book from cache:', error);
     return null;
   }
 }
 
-/**
- * Clears the cached book from IndexedDB.
- */
-export async function clearBookCache(): Promise<void> {
-  const db = await openDB();
-  return new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const request = store.delete(KEY_NAME);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
+export async function saveBookToCache(pages: PageImage[], bookId: string = 'pepparappe'): Promise<void> {
+  try {
+    const db = await openDB();
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    store.put({ id: bookId, pages, timestamp: Date.now() });
+  } catch (error) {
+    console.error('Failed to save book to cache:', error);
+  }
 }
 
-/**
- * Main parser that takes a PDF File, processes it page-by-page using PDF.js in the browser,
- * and renders high-resolution JPEG page images.
- * 
- * @param file The PDF file object
- * @param onProgress Callback to notify the UI about processing progress (0 to 100)
- */
-export async function convertPdfToImages(
-  file: File | ArrayBuffer,
-  onProgress: (pageIndex: number, total: number, progressPercent: number) => void
+// PDF processing using CDN-loaded PDF.js
+export async function renderPdfPages(
+  arrayBuffer: ArrayBuffer,
+  onProgress: (current: number, total: number) => void
 ): Promise<PageImage[]> {
   const pdfjsLib = (window as any).pdfjsLib;
   if (!pdfjsLib) {
-    throw new Error('PDF.js library is not loaded. Please check your network connection.');
+    throw new Error('PDF.js library is not loaded. Please refresh the page.');
   }
 
-  // Set worker source URL for PDF.js
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  // Set worker
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
-  let arrayBuffer: ArrayBuffer;
-  if (file instanceof ArrayBuffer) {
-    arrayBuffer = file;
-  } else {
-    arrayBuffer = await file.arrayBuffer();
-  }
-  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-  const pdf = await loadingTask.promise;
-  const numPages = pdf.numPages;
+  try {
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
+    const numPages = pdf.numPages;
+    const pages: PageImage[] = [];
 
-  const renderedPages: PageImage[] = [];
+    for (let i = 1; i <= numPages; i++) {
+      const page = await pdf.getPage(i);
+      
+      // Determine viewport scale (we render at high resolution (scale 1.5 - 2.0) for razor sharp text)
+      const scale = 2.0; 
+      const viewport = page.getViewport({ scale });
+      
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (!context) {
+        throw new Error('Could not create 2D canvas context');
+      }
 
-  for (let i = 1; i <= numPages; i++) {
-    const page = await pdf.getPage(i);
-    
-    // We render at 2.2x scale to maintain extremely high resolution and crisp text
-    const viewport = page.getViewport({ scale: 2.2 });
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    
-    if (!context) {
-      throw new Error('Could not create 2D canvas context for PDF rendering.');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      // Draw background white explicitly (crucial for PDFs with transparent pages)
+      context.fillStyle = '#FFFFFF';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+      };
+
+      await page.render(renderContext).promise;
+      
+      // Convert canvas to compressed JPEG data URL for memory-friendly caching
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+      pages.push({
+        index: i - 1,
+        url: dataUrl,
+        width: viewport.width,
+        height: viewport.height,
+      });
+
+      onProgress(i, numPages);
     }
 
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-
-    // Render page into the canvas context
-    await page.render({
-      canvasContext: context,
-      viewport: viewport,
-    }).promise;
-
-    // Convert canvas to compressed JPEG URL at 90% quality
-    // This maintains excellent, crisp resolution while keeping the memory footprint lightweight
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-
-    renderedPages.push({
-      index: i - 1,
-      dataUrl,
-      width: viewport.width,
-      height: viewport.height,
-    });
-
-    const progressPercent = Math.round((i / numPages) * 100);
-    onProgress(i, numPages, progressPercent);
-
-    // Free memory by releasing PDF.js page resources
-    page.cleanup();
+    return pages;
+  } catch (error) {
+    console.error('Error rendering PDF pages:', error);
+    throw error;
   }
-
-  return renderedPages;
 }
