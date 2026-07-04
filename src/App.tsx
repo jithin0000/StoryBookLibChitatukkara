@@ -553,6 +553,7 @@ export default function App() {
             pages={pages}
             layout={layout}
             onLayoutChange={setLayout}
+            onPageChange={setCurrentPage}
           />
         )}
       </main>

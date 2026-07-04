@@ -45,6 +45,7 @@ export default function TactileBook({
 
   const activeLayout = isMobile ? 'single' : layout;
   const isDoubleSpread = activeLayout === 'double' && currentPage > 0 && currentPage < pages.length - 1;
+  const isAtEnd = currentPage >= pages.length - (activeLayout === 'double' && isDoubleSpread ? 2 : 1);
 
   // Responsive scaling to fit container
   useEffect(() => {
@@ -483,57 +484,83 @@ export default function TactileBook({
       </div>
 
       {/* Footer Navigation Overlay */}
-      <div className="w-full max-w-lg flex items-center justify-between mt-2 sm:mt-3 px-2 sm:px-4 z-10 select-none">
-        <button
-          id="prev-page-button"
-          onClick={prevPage}
-          disabled={currentPage === 0 || isFlipping}
-          className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-stone-900 border border-gold/20 text-gold/80 hover:text-gold hover:bg-stone-800 disabled:opacity-30 disabled:hover:bg-stone-900 disabled:hover:text-gold/80 transition-all cursor-pointer shadow-lg disabled:cursor-not-allowed"
-          title="Previous Page (Left Arrow)"
-        >
-          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-        </button>
-
-        {/* Minimal tactile dot indicators of book progress */}
-        <div className="flex-1 px-2 sm:px-8 flex items-center justify-center gap-1 overflow-hidden">
-          {pages.length <= 15 ? (
-            pages.map((_, i) => (
-              <button
-                key={i}
-                id={`dot-indicator-${i}`}
-                onClick={() => !isFlipping && onPageChange(i)}
-                className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
-                  i === currentPage || (isDoubleSpread && i === currentPage + 1)
-                    ? 'w-5 bg-gold shadow'
-                    : 'w-2 bg-stone-700 hover:bg-stone-500'
-                }`}
-              />
-            ))
-          ) : (
-            /* Compressed layout for books with many pages */
-            <div className="w-full flex flex-col items-center gap-1.5">
-              <div className="w-full bg-stone-800 h-1.5 rounded-full overflow-hidden border border-gold/5">
-                <div 
-                  className="bg-gradient-to-r from-gold/50 to-gold h-full rounded-full transition-all duration-300"
-                  style={{ width: `${((currentPage + (isDoubleSpread ? 2 : 1)) / pages.length) * 100}%` }}
-                />
+      <div className="w-full max-w-lg flex flex-col items-center gap-2 sm:gap-3 mt-2 sm:mt-3 px-2 sm:px-4 z-10 select-none">
+        {/* Animated Congratulations Banner when the book is finished */}
+        {isAtEnd && (
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="w-full bg-slate-950/95 border border-gold/30 rounded-xl p-3 flex items-center justify-between gap-3 shadow-lg shadow-gold/5"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🎉</span>
+              <div className="text-left">
+                <p className="text-[11px] sm:text-xs font-bold text-gold tracking-wide uppercase">Book Completed!</p>
+                <p className="text-[9px] sm:text-[10px] text-stone-400">You have finished the magazine.</p>
               </div>
-              <span className="font-mono text-[10px] text-stone-500 tracking-wide">
-                Page {currentPage + 1} of {pages.length}
-              </span>
             </div>
-          )}
-        </div>
+            <button
+              onClick={() => onPageChange(0)}
+              className="flex items-center gap-1 sm:gap-1.5 px-3 py-1.5 bg-gradient-to-r from-gold to-amber-500 hover:from-amber-500 hover:to-gold text-slate-950 font-bold text-[10px] sm:text-xs rounded-lg shadow-md transition-all active:scale-95 cursor-pointer font-sans"
+            >
+              <RefreshCw className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              Read Again
+            </button>
+          </motion.div>
+        )}
 
-        <button
-          id="next-page-button"
-          onClick={nextPage}
-          disabled={currentPage >= pages.length - (activeLayout === 'double' && isDoubleSpread ? 2 : 1) || isFlipping}
-          className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-stone-900 border border-gold/20 text-gold/80 hover:text-gold hover:bg-stone-800 disabled:opacity-30 disabled:hover:bg-stone-900 disabled:hover:text-gold/80 transition-all cursor-pointer shadow-lg disabled:cursor-not-allowed"
-          title="Next Page (Right Arrow)"
-        >
-          <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
-        </button>
+        <div className="w-full flex items-center justify-between">
+          <button
+            id="prev-page-button"
+            onClick={prevPage}
+            disabled={currentPage === 0 || isFlipping}
+            className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-stone-900 border border-gold/20 text-gold/80 hover:text-gold hover:bg-stone-800 disabled:opacity-30 disabled:hover:bg-stone-900 disabled:hover:text-gold/80 transition-all cursor-pointer shadow-lg disabled:cursor-not-allowed"
+            title="Previous Page (Left Arrow)"
+          >
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+
+          {/* Minimal tactile dot indicators of book progress */}
+          <div className="flex-1 px-2 sm:px-8 flex items-center justify-center gap-1 overflow-hidden">
+            {pages.length <= 15 ? (
+              pages.map((_, i) => (
+                <button
+                  key={i}
+                  id={`dot-indicator-${i}`}
+                  onClick={() => !isFlipping && onPageChange(i)}
+                  className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                    i === currentPage || (isDoubleSpread && i === currentPage + 1)
+                      ? 'w-5 bg-gold shadow'
+                      : 'w-2 bg-stone-700 hover:bg-stone-500'
+                  }`}
+                />
+              ))
+            ) : (
+              /* Compressed layout for books with many pages */
+              <div className="w-full flex flex-col items-center gap-1.5">
+                <div className="w-full bg-stone-800 h-1.5 rounded-full overflow-hidden border border-gold/5">
+                  <div 
+                    className="bg-gradient-to-r from-gold/50 to-gold h-full rounded-full transition-all duration-300"
+                    style={{ width: `${((currentPage + (isDoubleSpread ? 2 : 1)) / pages.length) * 100}%` }}
+                  />
+                </div>
+                <span className="font-mono text-[10px] text-stone-500 tracking-wide">
+                  Page {currentPage + 1} of {pages.length}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <button
+            id="next-page-button"
+            onClick={nextPage}
+            disabled={currentPage >= pages.length - (activeLayout === 'double' && isDoubleSpread ? 2 : 1) || isFlipping}
+            className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-stone-900 border border-gold/20 text-gold/80 hover:text-gold hover:bg-stone-800 disabled:opacity-30 disabled:hover:bg-stone-900 disabled:hover:text-gold/80 transition-all cursor-pointer shadow-lg disabled:cursor-not-allowed"
+            title="Next Page (Right Arrow)"
+          >
+            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Offscreen Preloader for adjacent pages to completely eliminate image loading flicker */}

@@ -5,16 +5,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { PageImage, ViewLayout } from '../types';
-import { Layers } from 'lucide-react';
+import { Layers, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface ScrollBookProps {
   pages: PageImage[];
   layout: ViewLayout;
   onLayoutChange: (layout: ViewLayout) => void;
+  onPageChange: (index: number) => void;
 }
 
-export default function ScrollBook({ pages, layout, onLayoutChange }: ScrollBookProps) {
+export default function ScrollBook({ pages, layout, onLayoutChange, onPageChange }: ScrollBookProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -194,6 +195,33 @@ export default function ScrollBook({ pages, layout, onLayoutChange }: ScrollBook
 
       {/* Render list of pages */}
       {renderPages()}
+
+      {/* Elegant Completion Card for continuous scrolling */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: false, margin: '-20px' }}
+        className="w-full max-w-xl bg-slate-950/80 border border-gold/20 rounded-xl p-5 sm:p-6 mb-12 flex flex-col items-center text-center gap-4 shadow-lg backdrop-blur"
+      >
+        <span className="text-3xl">🎉</span>
+        <div>
+          <h3 className="font-serif italic text-lg text-gold font-semibold">You've finished the book!</h3>
+          <p className="text-xs text-stone-400 mt-1">Thank you for reading the Chittattukara Balavedi Magazine.</p>
+        </div>
+        <button
+          onClick={() => {
+            const container = document.querySelector('.overflow-y-auto');
+            if (container) {
+              container.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+            onPageChange(0);
+          }}
+          className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-gold to-amber-500 hover:from-amber-500 hover:to-gold text-slate-950 font-bold text-xs rounded-lg shadow-md transition-all active:scale-95 cursor-pointer font-sans"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Read Again from Page 1
+        </button>
+      </motion.div>
     </div>
   );
 }
