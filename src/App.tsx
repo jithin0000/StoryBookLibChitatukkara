@@ -13,7 +13,7 @@ import {
 import BookNavbar from './components/BookNavbar';
 import TactileBook from './components/TactileBook';
 import ScrollBook from './components/ScrollBook';
-import { BookOpen, RefreshCw, Upload } from 'lucide-react';
+import { BookOpen, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const [pages, setPages] = useState<PageImage[]>([]);
@@ -30,47 +30,6 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState(0);
   const [mode, setMode] = useState<ReaderMode>('flip');
   const [layout, setLayout] = useState<ViewLayout>('double');
-
-  // Manual file upload handler
-  const processPdfFile = async (file: File) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const size = file.size;
-      const bookMeta: BookMetadata = {
-        name: file.name,
-        size: size,
-        totalPages: 0,
-      };
-
-      const renderedPages = await convertPdfToImages(file, (pageIdx, total, progress) => {
-        setLoadingPage(pageIdx);
-        setLoadingTotal(total);
-        setLoadingProgress(progress);
-      });
-
-      if (renderedPages.length === 0) {
-        throw new Error('This PDF contains no readable pages.');
-      }
-
-      bookMeta.totalPages = renderedPages.length;
-      setPages(renderedPages);
-      setMetadata(bookMeta);
-      await saveBookToCache(bookMeta, renderedPages);
-    } catch (err: any) {
-      console.error('Failed to parse uploaded PDF:', err);
-      setError(err?.message || 'Failed to parse the PDF file. Make sure it is not password-protected and is a valid PDF.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      processPdfFile(file);
-    }
-  };
 
   // Load the PDF automatically on start
   useEffect(() => {
@@ -220,51 +179,21 @@ export default function App() {
               )}
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-6 p-8 bg-slate-900/60 rounded-2xl border border-gold/15 shadow-2xl max-w-lg w-full animate-fade-in text-center">
+            <div className="flex flex-col items-center gap-6 p-8 bg-slate-900/40 rounded-2xl border border-red-500/10 shadow-lg max-w-md w-full animate-fade-in">
               <div className="w-14 h-14 rounded-full bg-red-950/40 flex items-center justify-center border border-red-900/30">
                 <BookOpen className="w-6 h-6 text-red-400 stroke-[1.5]" />
               </div>
-              
-              <div className="space-y-3">
-                <h3 className="font-serif italic text-2xl text-gold font-medium">Manuscript Not Found</h3>
-                <p className="text-sm text-stone-300 leading-relaxed max-w-sm mx-auto">
-                  Vercel or your production server couldn't locate the PDF. To make it load automatically on your deploy:
+              <div className="space-y-2">
+                <h3 className="font-serif italic text-xl text-gold font-medium">Manuscript Not Found</h3>
+                <p className="text-xs text-stone-400 leading-relaxed">
+                  Please copy the PDF file named <code className="px-1.5 py-0.5 bg-slate-950 text-gold rounded font-mono text-[10px] border border-gold/10">pepparappe.pdf</code> inside the <code className="px-1.5 py-0.5 bg-slate-950 text-gold rounded font-mono text-[10px] border border-gold/10">public/</code> directory to load your storybook.
                 </p>
-                <div className="text-left bg-slate-950/80 p-4 rounded-xl border border-gold/10 text-xs space-y-2 font-mono text-stone-400 max-w-md mx-auto">
-                  <div className="flex gap-2">
-                    <span className="text-gold font-bold">1.</span>
-                    <span>Verify the file is copied to the <code className="text-gold bg-slate-900 px-1 py-0.5 rounded">public/</code> directory.</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-gold font-bold">2.</span>
-                    <span>Add and commit it: <code className="text-gold bg-slate-900 px-1 py-0.5 rounded">git add public/pepparappe.pdf</code></span>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-gold font-bold">3.</span>
-                    <span>Push to GitHub: <code className="text-gold bg-slate-900 px-1 py-0.5 rounded">git push origin main</code></span>
-                  </div>
-                </div>
               </div>
-
               {error && (
-                <div className="w-full p-3 bg-red-950/20 rounded-lg border border-red-950/40 text-left max-w-md mx-auto">
-                  <p className="text-xs text-red-400 font-mono break-all leading-relaxed">{error}</p>
+                <div className="w-full p-3 bg-red-950/20 rounded-lg border border-red-950 text-left">
+                  <p className="text-xs text-red-400 font-mono break-all">{error}</p>
                 </div>
               )}
-
-              <div className="relative w-full max-w-md border border-dashed border-gold/20 hover:border-gold/40 rounded-xl p-6 bg-slate-950/30 hover:bg-slate-950/50 transition-all duration-300 group cursor-pointer mt-2">
-                <input
-                  type="file"
-                  accept=".pdf"
-                  onChange={handleFileChange}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                />
-                <div className="flex flex-col items-center gap-2">
-                  <Upload className="w-8 h-8 text-gold/60 group-hover:text-gold group-hover:scale-110 transition-all duration-300" />
-                  <span className="text-sm font-medium text-stone-200">Upload PDF Manually</span>
-                  <span className="text-xs text-stone-500">Select any PDF to render and cache it instantly</span>
-                </div>
-              </div>
             </div>
           )}
         </main>
