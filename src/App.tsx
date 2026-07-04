@@ -42,17 +42,22 @@ export default function App() {
         return;
       }
 
+
+
+
       // 2. Fetch the PDF automatically (using robust multiple strategies and generous timeout to prevent hanging or aborting on slow networks)
       setLoadingStep('Downloading Chittattukara Balavedi Magazine...');
       
       const candidates = [
-        '/pepparappe.pdf',
+        `${import.meta.env.BASE_URL}/pepparappe.pdf`,
+        'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/main/public/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/main/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLib/main/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/master/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLib/master/pepparappe.pdf',
         'https://raw.githubusercontent.com/JithinM/StoryBookLibChitatukkara/main/pepparappe.pdf',
-        'https://raw.githubusercontent.com/JithinM/StoryBookLib/main/pepparappe.pdf'
+        'https://raw.githubusercontent.com/JithinM/StoryBookLib/main/pepparappe.pdf',
+        'https://github.com/jithin0000/StoryBookLibChitatukkara/tree/e77d65b3f5ac6fe86060eea880431ef05ebcd8f6/public'
       ];
       
       // Define all download sources and proxies to try
