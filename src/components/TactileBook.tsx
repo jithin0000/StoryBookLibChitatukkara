@@ -145,9 +145,9 @@ export default function TactileBook({
     }
   };
 
-  // Pan gestures for mobile
+  // Pan gestures for single layout
   const handlePan = (_event: any, info: any) => {
-    if (!isMobile || isFlipping) return;
+    if (activeLayout !== 'single' || isFlipping) return;
     
     // Map negative horizontal movement (dragging left) to -180 rotation
     if (info.offset.x < 0) {
@@ -161,7 +161,7 @@ export default function TactileBook({
   };
 
   const handlePanEnd = async (_event: any, info: any) => {
-    if (!isMobile || isFlipping) return;
+    if (activeLayout !== 'single' || isFlipping) return;
     
     const threshold = 45; // responsive threshold in pixels
     const velocityThreshold = 180; // swipe speed
@@ -170,7 +170,7 @@ export default function TactileBook({
 
     if (xOffset < -threshold || xVelocity < -velocityThreshold) {
       // Turn forward (Next Page)
-      const step = activeLayout === 'double' && currentPage > 0 ? 2 : 1;
+      const step = 1;
       if (currentPage + step < pages.length) {
         setIsFlipping(true);
         // Animate remaining rotation to -180
@@ -193,7 +193,7 @@ export default function TactileBook({
       // Turn backward (Prev Page)
       if (currentPage > 0) {
         setIsFlipping(true);
-        const step = activeLayout === 'double' && currentPage > 2 ? 2 : 1;
+        const step = 1;
         const prevIndex = Math.max(currentPage - step, 0);
 
         // Setup starting visual state (rotated all the way left)
@@ -417,16 +417,15 @@ export default function TactileBook({
 
                 {/* Active Flippable Page Layer */}
                 <motion.div
-                  className="absolute top-1.5 bottom-1.5 left-1.5 right-1.5 bg-white rounded-lg overflow-hidden border border-stone-200 cursor-grab active:cursor-grabbing origin-left select-none"
+                  className="absolute top-1.5 bottom-1.5 left-1.5 right-1.5 bg-white rounded-lg overflow-hidden border border-stone-200 cursor-grab active:cursor-grabbing origin-left select-none touch-none"
                   style={{
                     zIndex: 25,
                     transformStyle: 'preserve-3d',
                     rotateY: bookRotateY,
                     transformOrigin: 'left center',
                   }}
-                  onPanStart={isMobile ? () => setIsFlipping(true) : undefined}
-                  onPan={isMobile ? handlePan : undefined}
-                  onPanEnd={isMobile ? handlePanEnd : undefined}
+                  onPan={activeLayout === 'single' ? handlePan : undefined}
+                  onPanEnd={activeLayout === 'single' ? handlePanEnd : undefined}
                 >
                   <div className="absolute inset-0 w-full h-full backface-hidden z-10 bg-white">
                     <img 
