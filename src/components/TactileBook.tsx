@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { PageImage, ViewLayout } from '../types';
 import { ArrowLeft, ArrowRight, RefreshCw, Layers } from 'lucide-react';
-import { motion, useMotionValue, useTransform, useAnimation } from 'framer-motion';
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import confetti from 'canvas-confetti';
 
 interface TactileBookProps {
@@ -27,16 +27,16 @@ export default function TactileBook({
   const [scale, setScale] = useState(1);
   const [isFlipping, setIsFlipping] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const controls = useAnimation();
 
-  // Motion values for drag integration
-  const dragX = useMotionValue(0);
-  
-  // Map drag x offset to 3D rotation
-  // For turning forward (dragging left, negative x): we rotate current page from 0 to -140 deg
-  // For turning backward (dragging right, positive x): we rotate incoming page from -140 to 0 deg
-  const rotateY = useTransform(dragX, [-200, 0, 200], [-130, 0, 130]);
-  const pageShadow = useTransform(dragX, [-200, 0, 200], [0.4, 0, 0.4]);
+  // Single MotionValue to track physical page rotation around Y-axis
+  const bookRotateY = useMotionValue(0);
+
+  // Map bookRotateY to shadow opacity dynamically
+  const pageShadow = useTransform(
+    bookRotateY,
+    [-180, -90, 0, 90, 180],
+    [0, 0.4, 0, 0.4, 0]
+  );
 
   // Handle window resizing and responsive scaling
   useEffect(() => {
@@ -111,11 +111,8 @@ export default function TactileBook({
     if (currentPage + step < pages.length) {
       setIsFlipping(true);
       
-      // Trigger gorgeous turning animation
-      await controls.start({
-        rotateY: -180,
-        transition: { duration: 0.6, ease: 'easeInOut' }
-      });
+      // Trigger gorgeous turning animation using programatic animate
+      await animate(bookRotateY, -180, { duration: 0.6, ease: 'easeInOut' });
       
       const nextIndex = Math.min(currentPage + step, pages.length - 1);
       onPageChange(nextIndex);
@@ -126,9 +123,7 @@ export default function TactileBook({
         triggerConfetti();
       }
 
-      // Reset coordinates silently
-      dragX.set(0);
-      controls.set({ rotateY: 0 });
+      bookRotateY.set(0);
       setIsFlipping(false);
     }
   };
@@ -140,22 +135,27 @@ export default function TactileBook({
       const step = activeLayout === 'double' && currentPage > 2 ? 2 : 1;
       const prevIndex = Math.max(currentPage - step, 0);
 
-      // Slide in from left transition
-      controls.set({ rotateY: -180 });
+      // Slide in from left transition: start at -180, then animate to 0
+      bookRotateY.set(-180);
       onPageChange(prevIndex);
 
-      await controls.start({
-        rotateY: 0,
-        transition: { duration: 0.6, ease: 'easeInOut' }
-      });
+      await animate(bookRotateY, 0, { duration: 0.6, ease: 'easeInOut' });
 
-      dragX.set(0);
       setIsFlipping(false);
     }
   };
 
-  // Drag Gesture Ended
-  const handleDragEnd = async (_event: any, info: any) => {
+  // Pan gestures for mobile
+  const handlePan = (_event: any, info: any) => {
+    if (!isMobile) return;
+    // Map offset.x directly to bookRotateY (negative is left, positive is right)
+    const angle = (info.offset.x / 200) * 140;
+    const clampedAngle = Math.max(-180, Math.min(180, angle));
+    bookRotateY.set(clampedAngle);
+  };
+
+  const handlePanEnd = async (_event: any, info: any) => {
+    if (!isMobile) return;
     const threshold = 70; // drag distance required to flip
     const velocityThreshold = 200; // fast swipe speed
     const xOffset = info.offset.x;
@@ -167,10 +167,7 @@ export default function TactileBook({
       if (currentPage + step < pages.length) {
         setIsFlipping(true);
         // Animate out the remaining flip rotation
-        await controls.start({
-          rotateY: -180,
-          transition: { duration: 0.3, ease: 'easeOut' }
-        });
+        await animate(bookRotateY, -180, { duration: 0.3, ease: 'easeOut' });
         const nextIndex = Math.min(currentPage + step, pages.length - 1);
         onPageChange(nextIndex);
         
@@ -180,13 +177,12 @@ export default function TactileBook({
           triggerConfetti();
         }
 
-        dragX.set(0);
-        controls.set({ rotateY: 0 });
+        bookRotateY.set(0);
         setIsFlipping(false);
       } else {
-        // Elastic snap back since no more pages
-        await controls.start({ rotateY: 0, transition: { type: 'spring', stiffness: 300, damping: 20 } });
-        dragX.set(0);
+        // Elastic snap back
+        await animate(bookRotateY, 0, { type: 'spring', stiffness: 300, damping: 20 });
+        setIsFlipping(false);
       }
     } else if (xOffset > threshold || xVelocity > velocityThreshold) {
       // Swipe right -> Go to Previous Page
@@ -196,25 +192,21 @@ export default function TactileBook({
         const prevIndex = Math.max(currentPage - step, 0);
         
         // Setup state on prev index, but visual page is flipped left
-        controls.set({ rotateY: -180 });
+        bookRotateY.set(-180);
         onPageChange(prevIndex);
 
         // Animate turning back
-        await controls.start({
-          rotateY: 0,
-          transition: { duration: 0.4, ease: 'easeOut' }
-        });
-        dragX.set(0);
+        await animate(bookRotateY, 0, { duration: 0.4, ease: 'easeOut' });
         setIsFlipping(false);
       } else {
         // Elastic snap back
-        await controls.start({ rotateY: 0, transition: { type: 'spring', stiffness: 300, damping: 20 } });
-        dragX.set(0);
+        await animate(bookRotateY, 0, { type: 'spring', stiffness: 300, damping: 20 });
+        setIsFlipping(false);
       }
     } else {
       // Snap back if threshold not met
-      await controls.start({ rotateY: 0, transition: { type: 'spring', stiffness: 300, damping: 25 } });
-      dragX.set(0);
+      await animate(bookRotateY, 0, { type: 'spring', stiffness: 300, damping: 25 });
+      setIsFlipping(false);
     }
   };
 
@@ -350,25 +342,15 @@ export default function TactileBook({
                   <span className="absolute bottom-2 left-4 font-mono text-[10px] text-stone-400 bg-black/40 px-2 py-0.5 rounded">Page {currentPage === 0 ? 'Cover' : currentPage + 1}</span>
                 </div>
 
-                {/* Right Flippable Active Page Sheet (Draggable with Mouse/Touch) */}
+                {/* Right Flippable Active Page Sheet (No gestures on double-page view) */}
                 <motion.div
-                  className="absolute top-2 bottom-2 left-1/2 right-2 bg-white rounded-r-md overflow-hidden border-l border-stone-200 page-shadow-left cursor-grab active:cursor-grabbing origin-left select-none"
+                  className="absolute top-2 bottom-2 left-1/2 right-2 bg-white rounded-r-md overflow-hidden border-l border-stone-200 page-shadow-left origin-left select-none"
                   style={{
                     zIndex: isFlipping ? 40 : 25,
                     transformStyle: 'preserve-3d',
-                    rotateY: rotateY,
+                    rotateY: bookRotateY,
                     transformOrigin: 'left center',
                   }}
-                  drag="x"
-                  dragConstraints={{ left: -300, right: 0 }}
-                  dragElastic={0.05}
-                  dragMomentum={false}
-                  onDragStart={() => setIsFlipping(true)}
-                  onDrag={(_event, info) => {
-                    dragX.set(info.offset.x);
-                  }}
-                  onDragEnd={handleDragEnd}
-                  animate={controls}
                 >
                   {/* Front Side of sheet (Currently viewed Page) */}
                   <div className="absolute inset-0 z-10 w-full h-full backface-hidden">
@@ -436,19 +418,12 @@ export default function TactileBook({
                   style={{
                     zIndex: 25,
                     transformStyle: 'preserve-3d',
-                    rotateY: rotateY,
+                    rotateY: bookRotateY,
                     transformOrigin: 'left center',
                   }}
-                  drag="x"
-                  dragConstraints={{ left: -300, right: 300 }}
-                  dragElastic={0.15}
-                  dragMomentum={false}
-                  onDragStart={() => setIsFlipping(true)}
-                  onDrag={(_event, info) => {
-                    dragX.set(info.offset.x);
-                  }}
-                  onDragEnd={handleDragEnd}
-                  animate={controls}
+                  onPanStart={isMobile ? () => setIsFlipping(true) : undefined}
+                  onPan={isMobile ? handlePan : undefined}
+                  onPanEnd={isMobile ? handlePanEnd : undefined}
                 >
                   <div className="absolute inset-0 w-full h-full backface-hidden z-10 bg-white">
                     <img 
