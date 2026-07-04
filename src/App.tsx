@@ -9,11 +9,12 @@ import {
   getBookFromCache,
   saveBookToCache,
   convertPdfToImages,
+  clearBookCache,
 } from './lib/pdfUtils';
 import BookNavbar from './components/BookNavbar';
 import TactileBook from './components/TactileBook';
 import ScrollBook from './components/ScrollBook';
-import { BookOpen, RefreshCw } from 'lucide-react';
+import { BookOpen, RefreshCw, AlertTriangle } from 'lucide-react';
 
 export default function App() {
   const [pages, setPages] = useState<PageImage[]>([]);
@@ -133,6 +134,19 @@ export default function App() {
     loadBook();
   }, []);
 
+  // Clear cache and force reload
+  const handleClearCacheAndReload = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await clearBookCache();
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      window.location.reload();
+    }
+  };
+
   // Set reader defaults based on screen size on book load
   useEffect(() => {
     if (pages.length > 0) {
@@ -180,19 +194,45 @@ export default function App() {
             </div>
           ) : (
             <div className="flex flex-col items-center gap-6 p-8 bg-slate-900/40 rounded-2xl border border-red-500/10 shadow-lg max-w-md w-full animate-fade-in">
-              <div className="w-14 h-14 rounded-full bg-red-950/40 flex items-center justify-center border border-red-900/30">
-                <BookOpen className="w-6 h-6 text-red-400 stroke-[1.5]" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-serif italic text-xl text-gold font-medium">Manuscript Not Found</h3>
-                <p className="text-xs text-stone-400 leading-relaxed">
-                  Please copy the PDF file named <code className="px-1.5 py-0.5 bg-slate-950 text-gold rounded font-mono text-[10px] border border-gold/10">pepparappe.pdf</code> inside the <code className="px-1.5 py-0.5 bg-slate-950 text-gold rounded font-mono text-[10px] border border-gold/10">public/</code> directory to load your storybook.
-                </p>
-              </div>
-              {error && (
-                <div className="w-full p-3 bg-red-950/20 rounded-lg border border-red-950 text-left">
-                  <p className="text-xs text-red-400 font-mono break-all">{error}</p>
-                </div>
+              {error && error.includes('Could not load') ? (
+                <>
+                  <div className="w-14 h-14 rounded-full bg-red-950/40 flex items-center justify-center border border-red-900/30">
+                    <BookOpen className="w-6 h-6 text-red-400 stroke-[1.5]" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-serif italic text-xl text-gold font-medium">Manuscript Not Found</h3>
+                    <p className="text-xs text-stone-400 leading-relaxed">
+                      Please copy the PDF file named <code className="px-1.5 py-0.5 bg-slate-950 text-gold rounded font-mono text-[10px] border border-gold/10">pepparappe.pdf</code> inside the <code className="px-1.5 py-0.5 bg-slate-950 text-gold rounded font-mono text-[10px] border border-gold/10">public/</code> directory to load your storybook.
+                    </p>
+                  </div>
+                  <div className="w-full p-3 bg-red-950/20 rounded-lg border border-red-950 text-left">
+                    <p className="text-xs text-red-400 font-mono break-all">{error}</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-14 h-14 rounded-full bg-amber-950/40 flex items-center justify-center border border-amber-900/30">
+                    <AlertTriangle className="w-6 h-6 text-amber-400 stroke-[1.5]" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-serif italic text-xl text-amber-400 font-medium">Invalid PDF Structure</h3>
+                    <p className="text-xs text-stone-400 leading-relaxed">
+                      The PDF file appears to be corrupted, truncated, or incomplete. This can happen if the upload was interrupted or if the file was incorrectly parsed.
+                    </p>
+                  </div>
+                  {error && (
+                    <div className="w-full p-3 bg-amber-950/20 rounded-lg border border-amber-950 text-left">
+                      <p className="text-xs text-amber-400 font-mono break-all">{error}</p>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleClearCacheAndReload}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-600 to-gold hover:from-amber-500 hover:to-yellow-400 text-slate-950 rounded-lg font-medium text-xs transition duration-200 shadow-md font-sans active:scale-95 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Reset Cache & Reload
+                  </button>
+                </>
               )}
             </div>
           )}
