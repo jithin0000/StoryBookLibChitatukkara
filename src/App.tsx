@@ -53,7 +53,7 @@ export default function App() {
       const candidates = [
         pepparappeUrl,
         '/pepparappe.pdf',
-        `${(import.meta as any).env?.BASE_URL || ''}/pepparappe.pdf`,
+       
         'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/main/public/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLibChitatukkara/main/pepparappe.pdf',
         'https://raw.githubusercontent.com/jithin0000/StoryBookLib/main/pepparappe.pdf',
