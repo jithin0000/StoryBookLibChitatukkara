@@ -149,13 +149,13 @@ export default function TactileBook({
   const handlePan = (_event: any, info: any) => {
     if (activeLayout !== 'single' || isFlipping) return;
     
-    // Map negative horizontal movement (dragging left) to -180 rotation
+    // Reduce rotation sensitivity: require 320px of drag to rotate 180 degrees
     if (info.offset.x < 0) {
-      const angle = (info.offset.x / 180) * 180; // Map 180px of drag to 180deg of rotation
+      const angle = (info.offset.x / 320) * 180; 
       bookRotateY.set(Math.max(-180, angle));
     } else {
       // Small visual resistance tilt when dragging right (to signal you can go back)
-      const angle = (info.offset.x / 180) * 25; // Max 25 degrees tilt
+      const angle = (info.offset.x / 320) * 25; // Max 25 degrees tilt
       bookRotateY.set(Math.min(25, angle));
     }
   };
@@ -163,8 +163,8 @@ export default function TactileBook({
   const handlePanEnd = async (_event: any, info: any) => {
     if (activeLayout !== 'single' || isFlipping) return;
     
-    const threshold = 45; // responsive threshold in pixels
-    const velocityThreshold = 180; // swipe speed
+    const threshold = 55; // Slightly increased threshold for deliberate swipes
+    const velocityThreshold = 150; // lower threshold to easily capture deliberate velocity swipes
     const xOffset = info.offset.x;
     const xVelocity = info.velocity.x;
 
@@ -173,8 +173,8 @@ export default function TactileBook({
       const step = 1;
       if (currentPage + step < pages.length) {
         setIsFlipping(true);
-        // Animate remaining rotation to -180
-        await animate(bookRotateY, -180, { duration: 0.35, ease: 'easeOut' });
+        // Animate remaining rotation to -180 smoothly with slower, premium duration
+        await animate(bookRotateY, -180, { duration: 0.65, ease: 'easeOut' });
         
         const nextIndex = Math.min(currentPage + step, pages.length - 1);
         onPageChange(nextIndex);
@@ -187,7 +187,7 @@ export default function TactileBook({
         setIsFlipping(false);
       } else {
         // Elastic snap back
-        await animate(bookRotateY, 0, { type: 'spring', stiffness: 250, damping: 20 });
+        await animate(bookRotateY, 0, { type: 'spring', stiffness: 180, damping: 25 });
       }
     } else if (xOffset > threshold || xVelocity > velocityThreshold) {
       // Turn backward (Prev Page)
@@ -200,16 +200,16 @@ export default function TactileBook({
         bookRotateY.set(-180);
         onPageChange(prevIndex);
         
-        // Then animate turning back to 0
-        await animate(bookRotateY, 0, { duration: 0.45, ease: 'easeOut' });
+        // Then animate turning back to 0 with premium duration
+        await animate(bookRotateY, 0, { duration: 0.7, ease: 'easeOut' });
         setIsFlipping(false);
       } else {
         // Elastic snap back
-        await animate(bookRotateY, 0, { type: 'spring', stiffness: 250, damping: 20 });
+        await animate(bookRotateY, 0, { type: 'spring', stiffness: 180, damping: 25 });
       }
     } else {
-      // Snap back to 0 if gesture is small/undecided
-      await animate(bookRotateY, 0, { type: 'spring', stiffness: 250, damping: 22 });
+      // Snap back to 0 if gesture is small or undecided with elegant damping
+      await animate(bookRotateY, 0, { type: 'spring', stiffness: 180, damping: 25 });
     }
   };
 
