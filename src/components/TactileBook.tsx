@@ -134,13 +134,23 @@ export default function TactileBook({
         onPageChange(targetIndex);
         setIsFlipping(false);
         setFlipDirection(null);
-      }, 600);
+      }, 1200);
     }
   };
 
   // Determine which page indexes to show based on current layout
-  const leftPageIdx = isDoubleSpread ? currentPage : null;
-  const rightPageIdx = isDoubleSpread ? currentPage + 1 : currentPage;
+  let leftPageIdx = isDoubleSpread ? currentPage : null;
+  let rightPageIdx = isDoubleSpread ? currentPage + 1 : currentPage;
+
+  if (isDoubleSpread && isFlipping) {
+    if (flipDirection === 'next') {
+      leftPageIdx = currentPage;
+      rightPageIdx = Math.min(currentPage + 3, pages.length - 1);
+    } else if (flipDirection === 'prev') {
+      leftPageIdx = Math.max(currentPage - 2, 0);
+      rightPageIdx = currentPage + 1;
+    }
+  }
 
   // Render a single tactile page surface
   const renderPageSurface = (pageIdx: number, isLeft: boolean) => {
@@ -196,38 +206,34 @@ export default function TactileBook({
     );
   };
 
-  // Beautiful mobile page roll / curl transitions
+  // Beautiful single page roll / curl transitions
   const singlePageVariants = {
     enter: (dir: 'next' | 'prev') => ({
-      x: dir === 'next' ? '100%' : '-100%',
-      rotateY: dir === 'next' ? 45 : -45,
-      skewY: dir === 'next' ? -5 : 5,
-      opacity: 0,
-      scale: 0.9,
-      z: -100,
+      rotateY: dir === 'next' ? 0 : -180,
+      scale: dir === 'next' ? 0.96 : 1,
+      opacity: dir === 'next' ? 0.8 : 1,
+      zIndex: dir === 'next' ? 10 : 20,
+      transformOrigin: 'left center',
     }),
     center: {
-      x: 0,
       rotateY: 0,
-      skewY: 0,
-      opacity: 1,
       scale: 1,
-      z: 0,
+      opacity: 1,
+      zIndex: 15,
       transition: {
-        duration: 0.45,
-        ease: [0.16, 1, 0.3, 1], // easeOutExponential for elite response
+        duration: 1.2,
+        ease: [0.25, 1, 0.5, 1], // elegant ease-out
       }
     },
     exit: (dir: 'next' | 'prev') => ({
-      x: dir === 'next' ? '-110%' : '110%',
-      rotateY: dir === 'next' ? -75 : 75,
-      skewY: dir === 'next' ? 10 : -10,
-      opacity: 0,
-      scale: 0.85,
-      z: -150,
+      rotateY: dir === 'next' ? -180 : 0,
+      scale: dir === 'next' ? 1 : 0.96,
+      opacity: dir === 'next' ? 0 : 0.8,
+      zIndex: dir === 'next' ? 20 : 10,
+      transformOrigin: 'left center',
       transition: {
-        duration: 0.45,
-        ease: [0.16, 1, 0.3, 1],
+        duration: 1.2,
+        ease: [0.25, 1, 0.5, 1],
       }
     })
   };
@@ -385,13 +391,13 @@ export default function TactileBook({
                 <div 
                   className="absolute top-0 right-0 w-1/2 h-full z-40 origin-left"
                   style={{
-                    animation: 'pageFlipNext 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards',
+                    animation: 'pageFlipNext 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards',
                     transformStyle: 'preserve-3d',
                   }}
                 >
                   {/* Front of flipping sheet */}
                   <div className="absolute inset-0 backface-hidden" style={{ transformStyle: 'preserve-3d' }}>
-                    {renderPageSurface(currentPage, false)}
+                    {renderPageSurface(currentPage + 1, false)}
                   </div>
                   {/* Back of flipping sheet */}
                   <div 
@@ -411,13 +417,13 @@ export default function TactileBook({
                 <div 
                   className="absolute top-0 left-0 w-1/2 h-full z-40 origin-right"
                   style={{
-                    animation: 'pageFlipPrev 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards',
+                    animation: 'pageFlipPrev 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards',
                     transformStyle: 'preserve-3d',
                   }}
                 >
                   {/* Front of flipping sheet */}
                   <div className="absolute inset-0 backface-hidden" style={{ transformStyle: 'preserve-3d' }}>
-                    {renderPageSurface(currentPage + 1, true)}
+                    {renderPageSurface(currentPage, true)}
                   </div>
                   {/* Back of flipping sheet */}
                   <div 
@@ -448,6 +454,8 @@ export default function TactileBook({
                     width: designWidth,
                     height: designHeight,
                     transformStyle: 'preserve-3d',
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
                   }}
                 >
                   {renderPageSurface(currentPage, false)}
@@ -457,7 +465,7 @@ export default function TactileBook({
                     className="absolute inset-0 pointer-events-none z-20 rounded-xl"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: [0, 0.35, 0] }}
-                    transition={{ duration: 0.45, ease: 'easeInOut' }}
+                    transition={{ duration: 1.2, ease: 'easeInOut' }}
                     style={{
                       background: (flipDirection || 'next') === 'next'
                         ? 'linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(255,255,255,0.12) 30%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0) 100%)'
