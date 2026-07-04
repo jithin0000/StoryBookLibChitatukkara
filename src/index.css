@@ -44,3 +44,42 @@
 .page-shadow-left {
   box-shadow: -10px 0 30px -10px rgba(0,0,0,0.5), inset 10px 0 20px -10px rgba(0,0,0,0.3);
 }
+
+/* Starry Night Sky Animations */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.15; transform: scale(0.75); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes nebula-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(1) rotate(0deg); }
+  50% { opacity: 0.55; transform: scale(1.15) rotate(10deg); }
+}
+
+@keyframes shoot-star {
+  0% { transform: translateX(0) translateY(0) rotate(-40deg); opacity: 0; }
+  10% { opacity: 1; }
+  25% { opacity: 1; }
+  40% { transform: translateX(-400px) translateY(400px) rotate(-40deg); opacity: 0; }
+  100% { transform: translateX(-400px) translateY(400px) rotate(-40deg); opacity: 0; }
+}
+
+.animate-twinkle {
+  animation: twinkle var(--twinkle-duration, 3s) infinite ease-in-out;
+}
+
+.animate-nebula-pulse {
+  animation: nebula-pulse 30s infinite ease-in-out;
+}
+
+.shooting-star {
+  position: absolute;
+  width: 120px;
+  height: 1.5px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.95) 0%, rgba(229,193,88,0.4) 30%, rgba(255,255,255,0) 100%);
+  transform: rotate(-40deg);
+  opacity: 0;
+  animation: shoot-star 10s infinite ease-in-out;
+  pointer-events: none;
+}
+

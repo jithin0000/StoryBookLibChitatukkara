@@ -147,66 +147,69 @@ export default function TactileBook({
 
   // Pan gestures for mobile
   const handlePan = (_event: any, info: any) => {
-    if (!isMobile) return;
-    // Map offset.x directly to bookRotateY (negative is left, positive is right)
-    const angle = (info.offset.x / 200) * 140;
-    const clampedAngle = Math.max(-180, Math.min(180, angle));
-    bookRotateY.set(clampedAngle);
+    if (!isMobile || isFlipping) return;
+    
+    // Map negative horizontal movement (dragging left) to -180 rotation
+    if (info.offset.x < 0) {
+      const angle = (info.offset.x / 180) * 180; // Map 180px of drag to 180deg of rotation
+      bookRotateY.set(Math.max(-180, angle));
+    } else {
+      // Small visual resistance tilt when dragging right (to signal you can go back)
+      const angle = (info.offset.x / 180) * 25; // Max 25 degrees tilt
+      bookRotateY.set(Math.min(25, angle));
+    }
   };
 
   const handlePanEnd = async (_event: any, info: any) => {
-    if (!isMobile) return;
-    const threshold = 70; // drag distance required to flip
-    const velocityThreshold = 200; // fast swipe speed
+    if (!isMobile || isFlipping) return;
+    
+    const threshold = 45; // responsive threshold in pixels
+    const velocityThreshold = 180; // swipe speed
     const xOffset = info.offset.x;
     const xVelocity = info.velocity.x;
 
     if (xOffset < -threshold || xVelocity < -velocityThreshold) {
-      // Swipe left -> Go to Next Page
+      // Turn forward (Next Page)
       const step = activeLayout === 'double' && currentPage > 0 ? 2 : 1;
       if (currentPage + step < pages.length) {
         setIsFlipping(true);
-        // Animate out the remaining flip rotation
-        await animate(bookRotateY, -180, { duration: 0.3, ease: 'easeOut' });
+        // Animate remaining rotation to -180
+        await animate(bookRotateY, -180, { duration: 0.35, ease: 'easeOut' });
+        
         const nextIndex = Math.min(currentPage + step, pages.length - 1);
         onPageChange(nextIndex);
         
-        // Trigger confetti if completed
-        const nextIsAtEnd = nextIndex >= pages.length - (activeLayout === 'double' && nextIndex > 0 && nextIndex < pages.length - 1 ? 2 : 1);
-        if (nextIsAtEnd) {
+        if (nextIndex >= pages.length - 1) {
           triggerConfetti();
         }
-
+        
         bookRotateY.set(0);
         setIsFlipping(false);
       } else {
         // Elastic snap back
-        await animate(bookRotateY, 0, { type: 'spring', stiffness: 300, damping: 20 });
-        setIsFlipping(false);
+        await animate(bookRotateY, 0, { type: 'spring', stiffness: 250, damping: 20 });
       }
     } else if (xOffset > threshold || xVelocity > velocityThreshold) {
-      // Swipe right -> Go to Previous Page
+      // Turn backward (Prev Page)
       if (currentPage > 0) {
         setIsFlipping(true);
         const step = activeLayout === 'double' && currentPage > 2 ? 2 : 1;
         const prevIndex = Math.max(currentPage - step, 0);
-        
-        // Setup state on prev index, but visual page is flipped left
+
+        // Setup starting visual state (rotated all the way left)
         bookRotateY.set(-180);
         onPageChange(prevIndex);
-
-        // Animate turning back
-        await animate(bookRotateY, 0, { duration: 0.4, ease: 'easeOut' });
+        
+        // Then animate turning back to 0
+        await animate(bookRotateY, 0, { duration: 0.45, ease: 'easeOut' });
         setIsFlipping(false);
       } else {
         // Elastic snap back
-        await animate(bookRotateY, 0, { type: 'spring', stiffness: 300, damping: 20 });
-        setIsFlipping(false);
+        await animate(bookRotateY, 0, { type: 'spring', stiffness: 250, damping: 20 });
       }
     } else {
-      // Snap back if threshold not met
-      await animate(bookRotateY, 0, { type: 'spring', stiffness: 300, damping: 25 });
-      setIsFlipping(false);
+      // Snap back to 0 if gesture is small/undecided
+      await animate(bookRotateY, 0, { type: 'spring', stiffness: 250, damping: 22 });
     }
   };
 

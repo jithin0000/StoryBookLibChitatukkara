@@ -8,6 +8,7 @@ import { renderPdfPages, getBookFromCache, saveBookToCache } from './lib/pdfUtil
 import BookNavbar from './components/BookNavbar';
 import TactileBook from './components/TactileBook';
 import ScrollBook from './components/ScrollBook';
+import StarryBackground from './components/StarryBackground';
 import { BookOpen, RefreshCw, AlertCircle, Loader2, Upload } from 'lucide-react';
 
 export default function App() {
@@ -207,7 +208,10 @@ export default function App() {
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-slate-950 text-stone-100 select-none overflow-hidden">
+    <div className="w-full h-full flex flex-col relative text-stone-100 select-none overflow-hidden">
+      {/* Real-time Twinkling Starry Night Background */}
+      <StarryBackground />
+
       {/* Top Navbar */}
       <BookNavbar
         mode={mode}
@@ -220,7 +224,7 @@ export default function App() {
         
         {/* LOADING PROGRESS VIEW */}
         {isLoading && (
-          <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none animate-fade-in">
+          <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center select-none animate-fade-in">
             <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-amber-700/50 to-gold/70 flex items-center justify-center border border-gold/20 shadow-2xl mb-8 animate-pulse-subtle">
               <BookOpen className="w-10 h-10 text-gold" />
             </div>
@@ -262,7 +266,7 @@ export default function App() {
 
         {/* ERROR SCREEN */}
         {error && !isLoading && (
-          <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none overflow-y-auto">
+          <div className="absolute inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center select-none overflow-y-auto">
             <div className="w-16 h-16 rounded-full bg-red-950/40 flex items-center justify-center border border-red-500/20 shadow-xl mb-6">
               <AlertCircle className="w-8 h-8 text-red-500" />
             </div>
