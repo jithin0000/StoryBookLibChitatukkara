@@ -40,17 +40,47 @@ export default function App() {
         // 1. Check if there's a cached version in IndexedDB
         const cached = await getBookFromCache();
 
-        // 2. Fetch the PDF automatically from the root
+        // 2. Fetch the PDF automatically from the public directory
         let response = await fetch('/pepparappe.pdf');
         let filename = 'Pepparappe - Chittattukara Public Library.pdf';
-        
-        if (!response.ok) {
-          response = await fetch('/pepperappe.pdf');
-          filename = 'Pepperappe - Chittattukara Public Library.pdf';
+        let arrayBuffer: ArrayBuffer | null = null;
+        let isSuccess = false;
+
+        if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
+          const tempBuffer = await response.arrayBuffer();
+          const uint8 = new Uint8Array(tempBuffer);
+          const isPdf = uint8.length >= 5 &&
+                        uint8[0] === 0x25 &&
+                        uint8[1] === 0x50 &&
+                        uint8[2] === 0x44 &&
+                        uint8[3] === 0x46 &&
+                        uint8[4] === 0x2d; // %PDF-
+          if (isPdf) {
+            arrayBuffer = tempBuffer;
+            isSuccess = true;
+          }
         }
 
-        if (response.ok) {
-          const arrayBuffer = await response.arrayBuffer();
+        if (!isSuccess) {
+          response = await fetch('/pepperappe.pdf');
+          filename = 'Pepperappe - Chittattukara Public Library.pdf';
+          if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
+            const tempBuffer = await response.arrayBuffer();
+            const uint8 = new Uint8Array(tempBuffer);
+            const isPdf = uint8.length >= 5 &&
+                          uint8[0] === 0x25 &&
+                          uint8[1] === 0x50 &&
+                          uint8[2] === 0x44 &&
+                          uint8[3] === 0x46 &&
+                          uint8[4] === 0x2d; // %PDF-
+            if (isPdf) {
+              arrayBuffer = tempBuffer;
+              isSuccess = true;
+            }
+          }
+        }
+
+        if (isSuccess && arrayBuffer) {
           const size = arrayBuffer.byteLength;
 
           // If cache exists and has matching file size, load it instantly!
@@ -89,7 +119,7 @@ export default function App() {
             setPages(cached.pages);
             setMetadata(cached.metadata);
           } else {
-            throw new Error("Could not load '/pepparappe.pdf' or '/pepperappe.pdf'. Make sure you upload the PDF file to the root directory.");
+            throw new Error("Could not load a valid '/pepparappe.pdf' or '/pepperappe.pdf'. Make sure you copy your PDF file inside the 'public/' directory before committing to GitHub or deploying to Vercel.");
           }
         }
       } catch (err: any) {
@@ -156,7 +186,7 @@ export default function App() {
               <div className="space-y-2">
                 <h3 className="font-serif italic text-xl text-gold font-medium">Manuscript Not Found</h3>
                 <p className="text-xs text-stone-400 leading-relaxed">
-                  Please upload the PDF file named <code className="px-1.5 py-0.5 bg-slate-950 text-gold rounded font-mono text-[10px] border border-gold/10">pepparappe.pdf</code> to the root directory to load your storybook.
+                  Please copy the PDF file named <code className="px-1.5 py-0.5 bg-slate-950 text-gold rounded font-mono text-[10px] border border-gold/10">pepparappe.pdf</code> inside the <code className="px-1.5 py-0.5 bg-slate-950 text-gold rounded font-mono text-[10px] border border-gold/10">public/</code> directory to load your storybook.
                 </p>
               </div>
               {error && (
